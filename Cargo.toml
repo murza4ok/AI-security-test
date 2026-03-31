@@ -1,0 +1,70 @@
+[package]
+name = "ai-security-test"
+version = "0.1.0"
+edition = "2021"
+description = "Educational CLI tool for LLM security testing and vulnerability research"
+authors = []
+
+# Binary name: run as `ai-sec` instead of the package name
+[[bin]]
+name = "ai-sec"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client with rustls (no OpenSSL dependency)
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# CLI argument parsing with color support
+clap = { version = "4", features = ["derive", "color", "env"] }
+
+# Terminal colors
+owo-colors = "4"
+
+# Progress bars and spinners
+indicatif = "0.17"
+
+# Interactive menus and prompts
+dialoguer = "0.11"
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Load .env files
+dotenvy = "0.15"
+
+# Async trait support (needed for async fn in traits)
+async-trait = "0.1"
+
+# Template engine for payload variable substitution
+handlebars = "5"
+
+# Timestamps for session tracking
+chrono = { version = "0.4", features = ["serde"] }
+
+# Session IDs
+uuid = { version = "1", features = ["v4"] }
+
+# Structured logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Regex for response heuristic evaluation
+regex = "1"
+
+# Pretty table output in terminal
+comfy-table = "7"
+
+# Random payload selection for variation
+rand = "0.8"
+
+[dev-dependencies]
+tokio-test = "0.4"

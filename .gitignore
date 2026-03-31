@@ -1,0 +1,19 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# Environment variables (API keys — never commit!)
+.env
+.env.local
+
+# Personal session docs (gitignored by design — see docs/Rules.md)
+docs/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
