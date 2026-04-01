@@ -8,8 +8,10 @@
 //! The attack engine interacts only with the trait, keeping it provider-agnostic.
 
 pub mod anthropic;
+pub mod deepseek;
 pub mod ollama;
 pub mod openai;
+pub mod yandexgpt;
 pub mod traits;
 
-pub use traits::{LLMProvider, LLMResponse, ProviderError, RequestConfig};
+pub use traits::{LLMProvider, RequestConfig};

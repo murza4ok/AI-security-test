@@ -28,6 +28,7 @@ impl Default for RequestConfig {
 
 /// A response received from an LLM provider.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct LLMResponse {
     /// The model's text output
     pub text: String,
@@ -60,6 +61,7 @@ pub enum ProviderError {
     ApiError { status: u16, message: String },
 
     #[error("Request timed out after {timeout_secs}s")]
+    #[allow(dead_code)]
     Timeout { timeout_secs: u64 },
 
     #[error("Provider is not configured (missing API key or URL)")]
@@ -68,6 +70,7 @@ pub enum ProviderError {
 
 /// The central abstraction for all LLM providers.
 /// Implement this trait to add support for a new provider.
+#[allow(dead_code)]
 #[async_trait]
 pub trait LLMProvider: Send + Sync {
     /// Human-readable provider + model name for display (e.g., "OpenAI GPT-4o")

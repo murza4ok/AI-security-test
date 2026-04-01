@@ -3,8 +3,9 @@
 //! Provides a dialoguer-based menu for the interactive (no-argument) mode.
 //! Guides the user through provider selection, attack selection, and results.
 
+#![allow(dead_code)]
+
 use crate::attacks::registry::all_attacks;
-use crate::cli::display;
 use anyhow::Result;
 use dialoguer::{theme::ColorfulTheme, MultiSelect, Select};
 

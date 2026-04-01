@@ -2,6 +2,8 @@
 //!
 //! Formats session results as coloured tables and text for display in the terminal.
 
+#![allow(dead_code)]
+
 use crate::engine::session::{AttackRun, TestSession};
 use comfy_table::{Table, Cell, Color, Attribute};
 use owo_colors::OwoColorize;

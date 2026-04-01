@@ -16,6 +16,10 @@ pub struct AppConfig {
     pub anthropic: Option<AnthropicConfig>,
     /// Ollama configuration (optional — only required if using Ollama)
     pub ollama: Option<OllamaConfig>,
+    /// DeepSeek configuration (optional — OpenAI-compatible API)
+    pub deepseek: Option<DeepSeekConfig>,
+    /// YandexGPT configuration (optional — Yandex Foundation Models API)
+    pub yandexgpt: Option<YandexGptConfig>,
     /// Global request settings shared across providers
     pub request: RequestSettings,
 }
@@ -42,8 +46,27 @@ pub struct OllamaConfig {
     pub model: String,
 }
 
+/// DeepSeek-specific settings (OpenAI-compatible API)
+#[derive(Debug, Clone)]
+pub struct DeepSeekConfig {
+    pub api_key: String,
+    pub model: String,
+    pub base_url: String,
+}
+
+/// YandexGPT-specific settings
+#[derive(Debug, Clone)]
+pub struct YandexGptConfig {
+    pub api_key: String,
+    pub folder_id: String,
+    pub model: String,
+    /// true если api_key — IAM-токен, false если API-ключ
+    pub use_iam_token: bool,
+}
+
 /// Shared request behaviour settings
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RequestSettings {
     /// How long to wait for a single LLM response before timing out
     pub timeout: Duration,
@@ -59,6 +82,8 @@ impl AppConfig {
             openai: load_openai_config(),
             anthropic: load_anthropic_config(),
             ollama: load_ollama_config(),
+            deepseek: load_deepseek_config(),
+            yandexgpt: load_yandexgpt_config(),
             request: load_request_settings()?,
         })
     }
@@ -101,6 +126,42 @@ fn load_ollama_config() -> Option<OllamaConfig> {
         base_url: std::env::var("OLLAMA_BASE_URL")
             .unwrap_or_else(|_| "http://localhost:11434".to_string()),
         model,
+    })
+}
+
+/// Attempts to load DeepSeek config; returns None if DEEPSEEK_API_KEY is not set.
+fn load_deepseek_config() -> Option<DeepSeekConfig> {
+    let api_key = std::env::var("DEEPSEEK_API_KEY").ok()?;
+    if api_key.is_empty() {
+        return None;
+    }
+    Some(DeepSeekConfig {
+        api_key,
+        model: std::env::var("DEEPSEEK_MODEL")
+            .unwrap_or_else(|_| "deepseek-chat".to_string()),
+        base_url: std::env::var("DEEPSEEK_BASE_URL")
+            .unwrap_or_else(|_| "https://api.deepseek.com/v1".to_string()),
+    })
+}
+
+/// Attempts to load YandexGPT config; returns None if YANDEX_API_KEY is not set.
+fn load_yandexgpt_config() -> Option<YandexGptConfig> {
+    let api_key = std::env::var("YANDEX_API_KEY").ok()?;
+    if api_key.is_empty() {
+        return None;
+    }
+    let folder_id = std::env::var("YANDEX_FOLDER_ID").ok()?;
+    if folder_id.is_empty() {
+        return None;
+    }
+    // Если ключ начинается с "t1." — это IAM-токен, иначе — API-ключ
+    let use_iam_token = api_key.starts_with("t1.");
+    Some(YandexGptConfig {
+        api_key,
+        folder_id,
+        model: std::env::var("YANDEX_MODEL")
+            .unwrap_or_else(|_| "yandexgpt/latest".to_string()),
+        use_iam_token,
     })
 }
 

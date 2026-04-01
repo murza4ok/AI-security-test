@@ -6,4 +6,3 @@
 pub mod loader;
 pub mod template;
 
-pub use loader::{Payload, PayloadFile, PayloadLoader, PayloadMetadata};

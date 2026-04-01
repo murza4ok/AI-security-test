@@ -3,6 +3,8 @@
 //! Centralised colour palette and formatting utilities so that
 //! the rest of the codebase doesn't scatter colour codes everywhere.
 
+#![allow(dead_code)]
+
 use owo_colors::OwoColorize;
 
 // ── Colour-coded labels ───────────────────────────────────────────────────────

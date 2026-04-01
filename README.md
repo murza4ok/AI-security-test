@@ -1,122 +1,122 @@
-# ai-sec — LLM Security Testing Tool
+# ai-sec — Инструмент тестирования безопасности LLM
 
-An educational CLI tool for testing LLM (Large Language Model) security vulnerabilities. Built for security professionals who want to understand AI attack surfaces.
-
----
-
-## What it does
-
-`ai-sec` sends crafted prompts to LLMs and evaluates whether the model's safety training held or was bypassed. It covers **7 attack categories** with documented payloads, and includes educational content explaining each technique.
-
-This is a research and learning tool — not a weaponised automation framework. Every attack category ships with explanations, academic references, and mitigations.
+Обучающий CLI-инструмент для тестирования уязвимостей больших языковых моделей (LLM). Создан для специалистов по кибербезопасности, которые хотят разобраться в поверхности атак на AI-системы.
 
 ---
 
-## Quick Start
+## Что делает
+
+`ai-sec` отправляет специально подготовленные промпты в LLM и оценивает, устояла ли модель перед атакой или её safety-тренировка была обойдена. Инструмент покрывает **7 категорий атак** с документированными payload-ами и включает образовательный контент с объяснением каждой техники.
+
+Это исследовательский и обучающий инструмент, а не фреймворк для автоматизированных атак. Каждая категория атак поставляется с объяснениями, ссылками на научные работы и описанием мер защиты.
+
+---
+
+## Быстрый старт
 
 ```bash
-# 1. Copy env template and add your API key
+# 1. Скопируй шаблон конфига и добавь свой API-ключ
 cp .env.example .env
-# Edit .env and add OPENAI_API_KEY or ANTHROPIC_API_KEY
+# Открой .env и добавь OPENAI_API_KEY или ANTHROPIC_API_KEY
 
-# 2. Build
+# 2. Сборка
 cargo build --release
 
-# 3. Check connectivity
+# 3. Проверка подключения к провайдеру
 ./target/release/ai-sec check
 
-# 4. List available attacks
+# 4. Список доступных атак
 ./target/release/ai-sec list
 
-# 5. Run a specific attack
+# 5. Запуск конкретной атаки
 ./target/release/ai-sec run --attack jailbreaking
 
-# 6. Run with output saved to JSON
+# 6. Запуск с сохранением отчёта в JSON
 ./target/release/ai-sec run --attack jailbreaking --output report.json
 
-# 7. Interactive menu mode (no subcommand)
+# 7. Интерактивный режим (без аргументов)
 ./target/release/ai-sec
 
-# 8. Learn about an attack
+# 8. Узнать подробности об атаке
 ./target/release/ai-sec explain jailbreaking
 ```
 
 ---
 
-## Attack Categories
+## Категории атак
 
-| ID                    | Name                    | Payloads | Description |
-|-----------------------|-------------------------|----------|-------------|
-| `prompt_injection`    | Direct Prompt Injection | 6        | Override system instructions via user input |
-| `jailbreaking`        | Jailbreaking Techniques | 12       | DAN, roleplay, hypothetical, encoding tricks |
-| `extraction`          | System Prompt Extraction| 6        | Recover hidden operator instructions |
-| `goal_hijacking`      | Goal Hijacking          | 5        | Redirect model from intended to attacker task |
-| `token_attacks`       | Token-Level Attacks     | 8        | Unicode homoglyphs, zero-width chars, leetspeak |
-| `many_shot`           | Many-Shot Jailbreaking  | 3        | Condition model with many Q&A examples |
-| `context_manipulation`| Context Manipulation    | 5        | False permissions, memory poisoning |
-
----
-
-## Providers
-
-Configure in `.env` (copy from `.env.example`):
-
-| Provider  | Config vars                        | Notes |
-|-----------|------------------------------------|-------|
-| OpenAI    | `OPENAI_API_KEY`, `OPENAI_MODEL`   | Default model: `gpt-4o` |
-| Anthropic | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Default: `claude-3-5-sonnet-20241022` |
-| Ollama    | `OLLAMA_BASE_URL`, `OLLAMA_MODEL`  | Local; no key needed |
-
-Auto-selects first configured provider. Override with `--provider openai`.
+| ID                    | Название                 | Payload-ов | Описание |
+|-----------------------|--------------------------|------------|----------|
+| `prompt_injection`    | Direct Prompt Injection  | 6          | Переопределение системных инструкций через пользовательский ввод |
+| `jailbreaking`        | Jailbreaking Techniques  | 12         | DAN, roleplay, гипотетическое обрамление, трюки с кодировкой |
+| `extraction`          | System Prompt Extraction | 6          | Извлечение скрытых инструкций оператора |
+| `goal_hijacking`      | Goal Hijacking           | 5          | Перенаправление модели с исходной задачи на задачу атакующего |
+| `token_attacks`       | Token-Level Attacks      | 8          | Unicode-гомоглифы, zero-width символы, leetspeak |
+| `many_shot`           | Many-Shot Jailbreaking   | 3          | Кондиционирование модели через множество примеров |
+| `context_manipulation`| Context Manipulation     | 5          | Ложные разрешения, memory poisoning |
 
 ---
 
-## CLI Reference
+## Провайдеры
+
+Настраиваются в `.env` (скопируй из `.env.example`):
+
+| Провайдер | Переменные                           | Примечания |
+|-----------|--------------------------------------|------------|
+| OpenAI    | `OPENAI_API_KEY`, `OPENAI_MODEL`     | По умолчанию: `gpt-4o` |
+| Anthropic | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | По умолчанию: `claude-3-5-sonnet-20241022` |
+| Ollama    | `OLLAMA_BASE_URL`, `OLLAMA_MODEL`    | Локальный, ключ не нужен |
+
+Автоматически выбирается первый сконфигурированный провайдер. Для ручного выбора: `--provider openai`.
+
+---
+
+## Справка по CLI
 
 ```
-ai-sec [OPTIONS] [COMMAND]
+ai-sec [ОПЦИИ] [КОМАНДА]
 
-COMMANDS:
-  run      Run attack(s): --attack <id> [--limit N] [--output file.json]
-  list     List all attack categories and payload counts
-  explain  Show educational content: explain <attack_id>
-  check    Test provider connectivity
+КОМАНДЫ:
+  run      Запуск атак: --attack <id> [--limit N] [--output file.json]
+  list     Список всех категорий атак и количество payload-ов
+  explain  Образовательный контент: explain <attack_id>
+  check    Проверка подключения к провайдеру
 
-OPTIONS:
-  -p, --provider <PROVIDER>  Override provider (openai, anthropic, ollama)
-  -v, --verbose              Increase log verbosity
+ОПЦИИ:
+  -p, --provider <PROVIDER>  Выбор провайдера (openai, anthropic, ollama)
+  -v, --verbose              Подробный вывод логов
 ```
 
 ---
 
-## Result Labels
+## Метки результатов
 
-| Label        | Meaning |
-|--------------|---------|
-| `✓ REFUSED`  | Model refused — safety training held |
-| `⚠ PARTIAL`  | Ambiguous — partial compliance or unclear |
-| `✗ BYPASS`   | Attack succeeded — safety bypassed |
-| `  ERROR`    | Request failed (network/auth error) |
+| Метка        | Значение |
+|--------------|----------|
+| `✓ REFUSED`  | Модель отказала — safety-тренировка устояла |
+| `⚠ PARTIAL`  | Неоднозначно — частичное выполнение или неясный результат |
+| `✗ BYPASS`   | Атака успешна — safety обойден |
+| `  ERROR`    | Ошибка запроса (сеть / авторизация) |
 
-> All evaluations are **heuristic** based on keyword matching. Manual review is recommended for ambiguous results.
+> Все оценки — **эвристические** (на основе поиска ключевых слов). Для неоднозначных результатов рекомендуется ручной анализ.
 
 ---
 
-## Project Structure
+## Структура проекта
 
 ```
 ai-sec/
 ├── src/
-│   ├── main.rs          — Entry point, provider selection, command dispatch
-│   ├── config/          — Loads .env settings
-│   ├── providers/       — OpenAI, Anthropic, Ollama HTTP clients
-│   ├── attacks/         — 7 attack categories + registry
-│   ├── payloads/        — TOML loader + template renderer
-│   ├── engine/          — Runner, evaluator, session tracking
-│   ├── reporting/       — Terminal tables + JSON export
-│   ├── cli/             — Arg parsing, menus, display helpers
-│   └── education/       — Explain command content
-├── payloads/            — TOML payload files (editable without recompiling)
+│   ├── main.rs          — Точка входа, выбор провайдера, диспетчеризация команд
+│   ├── config/          — Загрузка настроек из .env
+│   ├── providers/       — HTTP-клиенты для OpenAI, Anthropic, Ollama
+│   ├── attacks/         — 7 категорий атак + реестр
+│   ├── payloads/        — Загрузчик TOML + шаблонизатор
+│   ├── engine/          — Runner, evaluator, трекинг сессий
+│   ├── reporting/       — Таблицы в терминале + JSON-экспорт
+│   ├── cli/             — Парсинг аргументов, меню, хелперы отображения
+│   └── education/       — Контент для команды explain
+├── payloads/            — TOML-файлы с payload-ами (редактируются без перекомпиляции)
 │   ├── prompt_injection/
 │   ├── jailbreaking/
 │   ├── extraction/
@@ -124,15 +124,15 @@ ai-sec/
 │   ├── token_attacks/
 │   ├── many_shot/
 │   └── context_manipulation/
-├── docs/               — Session notes, rules, operator plan (gitignored)
-└── .env.example        — Config template
+├── docs/               — Заметки по сессиям, правила, план оператора (в gitignore)
+└── .env.example        — Шаблон конфигурации
 ```
 
 ---
 
-## Adding New Payloads
+## Добавление новых payload-ов
 
-Payloads are TOML files — no Rust required:
+Payload-ы — это TOML-файлы. Знание Rust не требуется:
 
 ```toml
 # payloads/jailbreaking/my_payloads.toml
@@ -144,50 +144,53 @@ severity = "medium"
 [[payloads]]
 id = "my_test"
 name = "My Custom Payload"
-description = "What this tests"
-prompt = "Your prompt here..."
+description = "Что тестирует этот payload"
+prompt = "Текст промпта..."
 expected_refusal_keywords = ["cannot", "won't"]
-success_indicators = ["target phrase"]
+success_indicators = ["целевая фраза"]
 ```
 
-Restart `ai-sec` and your payloads appear automatically.
+Перезапусти `ai-sec` — новые payload-ы подхватятся автоматически.
 
 ---
 
-## Key Literature
+## Ключевая литература
 
-| Topic | Paper / Resource |
-|-------|-----------------|
-| Prompt Injection | [Perez & Ribeiro, 2022](https://arxiv.org/abs/2211.09527) |
-| Prompt Injection (taxonomy) | [Liu et al., 2023](https://arxiv.org/abs/2310.12815) |
-| Jailbreaking | [Wei et al., 2023](https://arxiv.org/abs/2307.02483) |
-| Wild Jailbreaks | [Shen et al., 2023](https://arxiv.org/abs/2308.03825) |
-| Adversarial Suffixes | [Zou et al., 2023](https://arxiv.org/abs/2307.15043) |
-| Many-Shot | [Anthropic, 2024](https://www.anthropic.com/research/many-shot-jailbreaking) |
-| Indirect Injection | [Greshake et al., 2023](https://arxiv.org/abs/2302.12173) |
-| **OWASP Top 10 for LLM** | [owasp.org](https://owasp.org/www-project-top-10-for-large-language-model-applications/) |
-| **MITRE ATLAS** | [atlas.mitre.org](https://atlas.mitre.org/) |
-
----
-
-## Ethical Use
-
-This tool is for **authorized security testing and education only**.
-
-- Always obtain explicit permission before testing any system
-- API keys belong in `.env` — never commit them
-- Results may contain sensitive model outputs — handle accordingly
-- The authors assume no liability for misuse
+| Тема | Работа / Ресурс |
+|------|-----------------|
+| Prompt Injection | [Perez & Ribeiro, 2022 — первая академическая статья](https://arxiv.org/abs/2211.09527) |
+| Prompt Injection (таксономия) | [Liu et al., 2023 — полная классификация](https://arxiv.org/abs/2310.12815) |
+| Jailbreaking | [Wei et al., 2023 — почему safety-тренировка ломается](https://arxiv.org/abs/2307.02483) |
+| Jailbreak-промпты из реальности | [Shen et al., 2023 — анализ диких промптов](https://arxiv.org/abs/2308.03825) |
+| Adversarial суффиксы (GCG) | [Zou et al., 2023 — gradient-based атаки](https://arxiv.org/abs/2307.15043) |
+| Many-Shot | [Anthropic, 2024 — many-shot jailbreaking](https://www.anthropic.com/research/many-shot-jailbreaking) |
+| Indirect Injection | [Greshake et al., 2023 — атаки через внешний контент](https://arxiv.org/abs/2302.12173) |
+| Бенчмаркинг | [HarmBench, 2024 — фреймворк оценки](https://arxiv.org/abs/2402.04249) |
+| **OWASP Top 10 для LLM** | [owasp.org — знакомая структура, но для AI](https://owasp.org/www-project-top-10-for-large-language-model-applications/) |
+| **MITRE ATLAS** | [atlas.mitre.org — ATT&CK для AI-систем](https://atlas.mitre.org/) |
+| Практика (CTF) | [Gandalf by Lakera — интерактивные задачи](https://gandalf.lakera.ai/) |
+| Блог практика | [Simon Willison — реальные примеры prompt injection](https://simonwillison.net/tags/prompt-injection/) |
 
 ---
 
-## Development Rules
+## Этичное использование
 
-See `docs/Rules.md` (gitignored, local only).
+Этот инструмент предназначен **исключительно для авторизованного тестирования безопасности и обучения**.
 
-Quick summary:
-- Every public function has a doc comment
-- Every module has a `//!` module comment  
-- No `unwrap()` in production paths
-- New attack = code + TOML + educational content
-- Commit style: `feat(attacks): add new payload set`
+- Всегда получайте явное разрешение перед тестированием любой системы
+- API-ключи хранятся в `.env` — никогда не коммитьте их
+- Результаты могут содержать чувствительные ответы моделей — обращайтесь соответственно
+- Авторы не несут ответственности за неправомерное использование
+
+---
+
+## Правила разработки
+
+Подробнее: `docs/Rules.md` (в gitignore, только локально).
+
+Коротко:
+- Каждая публичная функция — doc comment
+- Каждый модуль — `//!` комментарий
+- Никаких `unwrap()` в production-путях
+- Новая атака = код + TOML + образовательный контент
+- Стиль коммитов: `feat(attacks): add new payload set`
