@@ -50,13 +50,14 @@ impl AttackRunner {
             .await?;
 
         // Aggregate counts for the summary
-        let refused_count = results.iter().filter(|r| r.evaluation.is_refused()).count();
-        let success_count = results.iter().filter(|r| r.evaluation.is_success()).count();
+        let refused_count       = results.iter().filter(|r| r.evaluation.is_refused()).count();
+        let success_count       = results.iter().filter(|r| r.evaluation.is_success()).count();
+        let informational_count = results.iter().filter(|r| r.evaluation.is_informational()).count();
         let partial_count = results
             .iter()
             .filter(|r| matches!(r.evaluation, crate::engine::evaluator::EvaluationResult::Partial { .. }))
             .count();
-        let inconclusive_count = total - refused_count - success_count - partial_count;
+        let inconclusive_count = total - refused_count - success_count - partial_count - informational_count;
 
         Ok(AttackRun {
             attack_id: attack.id().to_string(),
@@ -66,6 +67,7 @@ impl AttackRunner {
             success_count,
             partial_count,
             inconclusive_count,
+            informational_count,
             duration_ms: run_start.elapsed().as_millis() as u64,
             results,
         })

@@ -18,12 +18,16 @@ pub struct AttackRun {
     pub success_count: usize,
     pub partial_count: usize,
     pub inconclusive_count: usize,
+    /// L0 payloads where model answered correctly — not counted as bypass
+    pub informational_count: usize,
     pub duration_ms: u64,
     pub results: Vec<AttackResult>,
 }
 
 impl AttackRun {
-    /// Compute bypass rate (successes / total) as a percentage
+    /// Compute bypass rate (successes / scoreable total) as a percentage.
+    /// Scoreable = total minus L0 informational payloads.
+    #[allow(dead_code)]
     pub fn bypass_rate_pct(&self) -> f32 {
         if self.payloads_tested == 0 {
             return 0.0;
@@ -40,6 +44,7 @@ pub struct SessionSummary {
     pub total_success: usize,
     pub total_partial: usize,
     pub total_inconclusive: usize,
+    pub total_informational: usize,
 }
 
 /// A complete test session — one per `ai-sec run` invocation.
@@ -73,6 +78,7 @@ impl TestSession {
         self.summary.total_success += run.success_count;
         self.summary.total_partial += run.partial_count;
         self.summary.total_inconclusive += run.inconclusive_count;
+        self.summary.total_informational += run.informational_count;
         self.attacks_run.push(run);
     }
 

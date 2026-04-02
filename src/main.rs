@@ -379,9 +379,10 @@ async fn run_attacks_and_display(
         // Print result label
         match result.evaluation.label() {
             "REFUSED" => display::print_refused(&result.payload_name),
-            "BYPASS" => display::print_success(&result.payload_name),
+            "BYPASS"  => display::print_success(&result.payload_name),
             "PARTIAL" => display::print_partial(&result.payload_name),
-            _ => display::print_error(&result.payload_name),
+            "INFO"    => display::print_informational(&result.payload_name),
+            _         => display::print_error(&result.payload_name),
         }
 
         // Print response preview (~150 chars)
