@@ -26,10 +26,10 @@ pub fn write_json_report(session: &TestSession, path: &Path) -> Result<()> {
 }
 
 /// Build a default output path in the ./results/ directory.
-/// Format: results/YYYY-MM-DD_HH-MM-SS.json
-pub fn default_output_path() -> PathBuf {
+/// Format: results/YYYY-MM-DD_HH-MM-SS_<provider>.json
+pub fn default_output_path(provider_id: &str) -> PathBuf {
     let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
-    PathBuf::from(format!("results/{}.json", timestamp))
+    PathBuf::from(format!("results/{}_{}.json", timestamp, provider_id))
 }
 
 /// Load a previously saved session from a JSON file.

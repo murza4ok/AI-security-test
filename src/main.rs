@@ -65,11 +65,14 @@ async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> 
     display::print_disclaimer();
     display::print_usage_hint();
 
-    let provider = build_provider(&cli.provider, &app_config)?;
+    let providers = build_all_providers(&cli.provider, &app_config)?;
     println!(
-        "  Provider: {} {}",
-        provider.name().bold(),
-        "✓".green()
+        "  Провайдеры: {}",
+        providers
+            .iter()
+            .map(|p| p.name().bold().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
     );
 
     let loader = payloads::loader::PayloadLoader::new("payloads");
@@ -78,20 +81,15 @@ async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> 
         let selection = cli::menu::show_main_menu()?;
         match selection {
             0 => {
-                // Run all attacks
-                if let Some(s) = run_attacks_and_display(
+                // Run all attacks across all configured providers
+                run_all_providers(
+                    &providers,
                     attacks::registry::all_attacks(),
-                    provider.as_ref(),
                     &loader,
                     &app_config,
                     None,
                 )
-                .await?
-                {
-                    let path = reporting::json_report::default_output_path();
-                    reporting::json_report::write_json_report(&s, &path)?;
-                    println!("  Report saved to: {}", path.display().to_string().green());
-                }
+                .await?;
             }
             1 => {
                 // Select attack categories via checkbox menu
@@ -104,19 +102,14 @@ async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> 
                     .iter()
                     .filter_map(|id| attacks::registry::find_attack(id))
                     .collect();
-                if let Some(s) = run_attacks_and_display(
+                run_all_providers(
+                    &providers,
                     selected_attacks,
-                    provider.as_ref(),
                     &loader,
                     &app_config,
                     None,
                 )
-                .await?
-                {
-                    let path = reporting::json_report::default_output_path();
-                    reporting::json_report::write_json_report(&s, &path)?;
-                    println!("  Report saved to: {}", path.display().to_string().green());
-                }
+                .await?;
             }
             2 => {
                 println!();
@@ -134,7 +127,7 @@ async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> 
                                 e.path().extension().and_then(|x| x.to_str()) == Some("json")
                             })
                             .collect();
-                        // Sort by modification time descending
+                        // Sort by modification time ascending, take last
                         files.sort_by_key(|e| {
                             e.metadata()
                                 .and_then(|m| m.modified())
@@ -145,10 +138,7 @@ async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> 
 
                 match latest {
                     Some(path) => {
-                        println!(
-                            "  Loading: {}",
-                            path.display().to_string().cyan()
-                        );
+                        println!("  Loading: {}", path.display().to_string().cyan());
                         match reporting::json_report::load_json_report(&path) {
                             Ok(session) => {
                                 reporting::terminal_report::print_session_review(&session);
@@ -201,11 +191,14 @@ async fn run_command(cmd: Commands, cli: Cli, app_config: config::AppConfig) -> 
             display::print_banner();
             println!("{}", "  Checking provider connectivity...".bold());
             println!();
-            let provider = build_provider(&cli.provider, &app_config)?;
-            print!("  {} ... ", provider.name().bold());
-            match provider.health_check().await {
-                Ok(()) => println!("{}", "✓ Connected".green().bold()),
-                Err(e) => println!("{} — {}", "✗ Failed".red().bold(), e),
+            // Check all configured providers (or just the overridden one)
+            let providers = build_all_providers(&cli.provider, &app_config)?;
+            for provider in &providers {
+                print!("  {:15} ... ", provider.name().bold());
+                match provider.health_check().await {
+                    Ok(()) => println!("{}", "✓ Connected".green().bold()),
+                    Err(e) => println!("{} — {}", "✗ Failed".red().bold(), e),
+                }
             }
         }
 
@@ -246,13 +239,7 @@ async fn run_command(cmd: Commands, cli: Cli, app_config: config::AppConfig) -> 
             display::print_banner();
             display::print_disclaimer();
 
-            let provider = build_provider(&cli.provider, &app_config)?;
-            println!(
-                "  Provider: {} {}\n",
-                provider.name().bold(),
-                "✓".green()
-            );
-
+            let providers = build_all_providers(&cli.provider, &app_config)?;
             let loader = payloads::loader::PayloadLoader::new("payloads");
 
             // Resolve attack IDs to implementations
@@ -276,18 +263,41 @@ async fn run_command(cmd: Commands, cli: Cli, app_config: config::AppConfig) -> 
                 );
             }
 
-            let session =
-                run_attacks_and_display(selected, provider.as_ref(), &loader, &app_config, limit)
-                    .await?;
-
-            // Save JSON report: use --output path if given, otherwise auto-generate
-            if let Some(s) = session {
-                let path = output.unwrap_or_else(reporting::json_report::default_output_path);
-                reporting::json_report::write_json_report(&s, &path)?;
-                println!(
-                    "  Report saved to: {}",
-                    path.display().to_string().green()
+            // If --output is set and there's more than one provider, warn that
+            // only the last session would be saved at that path.
+            if output.is_some() && providers.len() > 1 {
+                eprintln!(
+                    "  {} --output is ignored when running multiple providers; \
+                     reports are auto-named per provider.",
+                    "Warning:".yellow()
                 );
+            }
+
+            for provider in &providers {
+                let session = run_attacks_and_display(
+                    selected.clone(),
+                    provider.as_ref(),
+                    &loader,
+                    &app_config,
+                    limit,
+                )
+                .await?;
+
+                if let Some(s) = session {
+                    // Use explicit --output only when there's a single provider
+                    let path = if providers.len() == 1 {
+                        output
+                            .clone()
+                            .unwrap_or_else(|| reporting::json_report::default_output_path(provider.id()))
+                    } else {
+                        reporting::json_report::default_output_path(provider.id())
+                    };
+                    reporting::json_report::write_json_report(&s, &path)?;
+                    println!(
+                        "  Report saved to: {}",
+                        path.display().to_string().green()
+                    );
+                }
             }
         }
     }
@@ -295,7 +305,34 @@ async fn run_command(cmd: Commands, cli: Cli, app_config: config::AppConfig) -> 
     Ok(())
 }
 
-/// Execute attacks, print live progress, print summary table, return session.
+/// Run a set of attacks against every provider in sequence, saving a report for each.
+async fn run_all_providers(
+    providers: &[Arc<dyn providers::LLMProvider>],
+    attacks: Vec<Arc<dyn attacks::Attack>>,
+    loader: &payloads::loader::PayloadLoader,
+    app_config: &config::AppConfig,
+    limit: Option<usize>,
+) -> Result<()> {
+    for provider in providers {
+        let session = run_attacks_and_display(
+            attacks.clone(),
+            provider.as_ref(),
+            loader,
+            app_config,
+            limit,
+        )
+        .await?;
+
+        if let Some(s) = session {
+            let path = reporting::json_report::default_output_path(provider.id());
+            reporting::json_report::write_json_report(&s, &path)?;
+            println!("  Report saved to: {}", path.display().to_string().green());
+        }
+    }
+    Ok(())
+}
+
+/// Execute attacks against one provider, print live progress and summary table.
 async fn run_attacks_and_display(
     selected: Vec<Arc<dyn attacks::Attack>>,
     provider: &dyn providers::LLMProvider,
@@ -307,6 +344,19 @@ async fn run_attacks_and_display(
         println!("  No attacks to run.");
         return Ok(None);
     }
+
+    // Provider header — makes it clear which model is being tested right now
+    println!();
+    println!(
+        "{}",
+        format!(
+            "  ╔══ {} ══════════════════════════════════════════════",
+            provider.name()
+        )
+        .cyan()
+        .bold()
+    );
+    println!();
 
     let runner = AttackRunner::new(app_config.request.delay_between_requests);
 
@@ -356,99 +406,105 @@ async fn run_attacks_and_display(
     Ok(Some(session))
 }
 
-/// Build a provider from CLI override or first configured provider in app config.
-fn build_provider(
+/// Return all configured providers.
+/// If `override_id` is set, returns only that one provider (for --provider flag).
+/// Otherwise returns every provider that has credentials in the config.
+fn build_all_providers(
     override_id: &Option<String>,
     config: &config::AppConfig,
-) -> Result<Arc<dyn providers::LLMProvider>> {
-    let requested = override_id.as_deref();
-
-    // Explicit provider override
-    if let Some(id) = requested {
-        return match id {
-            "openai" => config
-                .openai
-                .as_ref()
-                .map(|c| {
-                    Arc::new(providers::openai::OpenAIProvider::from_config(c))
-                        as Arc<dyn providers::LLMProvider>
-                })
-                .ok_or_else(|| {
-                    anyhow::anyhow!("OpenAI not configured (missing OPENAI_API_KEY in .env)")
-                }),
-            "anthropic" => config
-                .anthropic
-                .as_ref()
-                .map(|c| {
-                    Arc::new(providers::anthropic::AnthropicProvider::from_config(c))
-                        as Arc<dyn providers::LLMProvider>
-                })
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Anthropic not configured (missing ANTHROPIC_API_KEY in .env)"
-                    )
-                }),
-            "ollama" => config
-                .ollama
-                .as_ref()
-                .map(|c| {
-                    Arc::new(providers::ollama::OllamaProvider::from_config(c))
-                        as Arc<dyn providers::LLMProvider>
-                })
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Ollama not configured (missing OLLAMA_MODEL in .env)"
-                    )
-                }),
-            "deepseek" => config
-                .deepseek
-                .as_ref()
-                .map(|c| {
-                    Arc::new(providers::deepseek::DeepSeekProvider::from_config(c))
-                        as Arc<dyn providers::LLMProvider>
-                })
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "DeepSeek not configured (missing DEEPSEEK_API_KEY in .env)"
-                    )
-                }),
-            "yandexgpt" => config
-                .yandexgpt
-                .as_ref()
-                .map(|c| {
-                    Arc::new(providers::yandexgpt::YandexGptProvider::from_config(c))
-                        as Arc<dyn providers::LLMProvider>
-                })
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "YandexGPT not configured (missing YANDEX_API_KEY / YANDEX_FOLDER_ID in .env)"
-                    )
-                }),
-            other => anyhow::bail!(
-                "Unknown provider '{}'. Valid: openai, anthropic, ollama, deepseek, yandexgpt",
-                other
-            ),
-        };
+) -> Result<Vec<Arc<dyn providers::LLMProvider>>> {
+    // Explicit --provider flag: return just that one
+    if let Some(id) = override_id.as_deref() {
+        return build_provider_by_id(id, config).map(|p| vec![p]);
     }
 
-    // Auto-select: pick the first configured provider
+    // No override: collect every configured provider
+    let mut list: Vec<Arc<dyn providers::LLMProvider>> = Vec::new();
+
     if let Some(c) = &config.deepseek {
-        return Ok(Arc::new(providers::deepseek::DeepSeekProvider::from_config(c)));
+        list.push(Arc::new(providers::deepseek::DeepSeekProvider::from_config(c)));
     }
     if let Some(c) = &config.yandexgpt {
-        return Ok(Arc::new(providers::yandexgpt::YandexGptProvider::from_config(c)));
+        list.push(Arc::new(providers::yandexgpt::YandexGptProvider::from_config(c)));
     }
     if let Some(c) = &config.anthropic {
-        return Ok(Arc::new(providers::anthropic::AnthropicProvider::from_config(c)));
+        list.push(Arc::new(providers::anthropic::AnthropicProvider::from_config(c)));
     }
     if let Some(c) = &config.openai {
-        return Ok(Arc::new(providers::openai::OpenAIProvider::from_config(c)));
+        list.push(Arc::new(providers::openai::OpenAIProvider::from_config(c)));
     }
     if let Some(c) = &config.ollama {
-        return Ok(Arc::new(providers::ollama::OllamaProvider::from_config(c)));
+        list.push(Arc::new(providers::ollama::OllamaProvider::from_config(c)));
     }
 
-    anyhow::bail!(
-        "No provider configured. Copy .env.example to .env and add an API key."
-    )
+    if list.is_empty() {
+        anyhow::bail!("No provider configured. Copy .env.example to .env and add an API key.");
+    }
+
+    Ok(list)
+}
+
+/// Build a single provider by its string ID (used when --provider is specified).
+fn build_provider_by_id(
+    id: &str,
+    config: &config::AppConfig,
+) -> Result<Arc<dyn providers::LLMProvider>> {
+    match id {
+        "openai" => config
+            .openai
+            .as_ref()
+            .map(|c| {
+                Arc::new(providers::openai::OpenAIProvider::from_config(c))
+                    as Arc<dyn providers::LLMProvider>
+            })
+            .ok_or_else(|| {
+                anyhow::anyhow!("OpenAI not configured (missing OPENAI_API_KEY in .env)")
+            }),
+        "anthropic" => config
+            .anthropic
+            .as_ref()
+            .map(|c| {
+                Arc::new(providers::anthropic::AnthropicProvider::from_config(c))
+                    as Arc<dyn providers::LLMProvider>
+            })
+            .ok_or_else(|| {
+                anyhow::anyhow!("Anthropic not configured (missing ANTHROPIC_API_KEY in .env)")
+            }),
+        "ollama" => config
+            .ollama
+            .as_ref()
+            .map(|c| {
+                Arc::new(providers::ollama::OllamaProvider::from_config(c))
+                    as Arc<dyn providers::LLMProvider>
+            })
+            .ok_or_else(|| {
+                anyhow::anyhow!("Ollama not configured (missing OLLAMA_MODEL in .env)")
+            }),
+        "deepseek" => config
+            .deepseek
+            .as_ref()
+            .map(|c| {
+                Arc::new(providers::deepseek::DeepSeekProvider::from_config(c))
+                    as Arc<dyn providers::LLMProvider>
+            })
+            .ok_or_else(|| {
+                anyhow::anyhow!("DeepSeek not configured (missing DEEPSEEK_API_KEY in .env)")
+            }),
+        "yandexgpt" => config
+            .yandexgpt
+            .as_ref()
+            .map(|c| {
+                Arc::new(providers::yandexgpt::YandexGptProvider::from_config(c))
+                    as Arc<dyn providers::LLMProvider>
+            })
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "YandexGPT not configured (missing YANDEX_API_KEY / YANDEX_FOLDER_ID in .env)"
+                )
+            }),
+        other => anyhow::bail!(
+            "Unknown provider '{}'. Valid: openai, anthropic, ollama, deepseek, yandexgpt",
+            other
+        ),
+    }
 }
