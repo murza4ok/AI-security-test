@@ -70,8 +70,12 @@ pub struct YandexGptConfig {
 pub struct RequestSettings {
     /// How long to wait for a single LLM response before timing out
     pub timeout: Duration,
-    /// Delay between consecutive requests to avoid rate limiting
+    /// Delay between attack categories (not individual payloads)
     pub delay_between_requests: Duration,
+    /// Max number of concurrent payload requests per attack category.
+    /// Higher = faster but risks hitting API rate limits.
+    /// Default: 5. Set CONCURRENCY=1 to restore sequential behaviour.
+    pub concurrency: usize,
 }
 
 impl AppConfig {
@@ -177,8 +181,14 @@ fn load_request_settings() -> Result<RequestSettings> {
         .parse()
         .context("REQUEST_DELAY_MS must be a positive integer")?;
 
+    let concurrency: usize = std::env::var("CONCURRENCY")
+        .unwrap_or_else(|_| "5".to_string())
+        .parse()
+        .context("CONCURRENCY must be a positive integer")?;
+
     Ok(RequestSettings {
         timeout: Duration::from_secs(timeout_secs),
         delay_between_requests: Duration::from_millis(delay_ms),
+        concurrency: concurrency.max(1),
     })
 }

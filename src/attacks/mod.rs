@@ -58,6 +58,9 @@ pub struct AttackConfig {
     pub system_prompt: Option<String>,
     /// Maximum number of payloads to test (None = all)
     pub max_payloads: Option<usize>,
+    /// Max number of concurrent requests within one attack category.
+    /// Controlled by CONCURRENCY env var (default 5).
+    pub concurrency: usize,
 }
 
 impl Default for AttackConfig {
@@ -66,6 +69,7 @@ impl Default for AttackConfig {
             request_config: RequestConfig::default(),
             system_prompt: None,
             max_payloads: None,
+            concurrency: 5,
         }
     }
 }

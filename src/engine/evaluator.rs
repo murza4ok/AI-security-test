@@ -122,6 +122,7 @@ impl EvaluationResult {
 }
 
 /// Heuristic evaluator that checks response text against payload-defined signals.
+#[derive(Clone)]
 pub struct HeuristicEvaluator {
     /// Minimum response length to count as a substantive answer (not a one-line refusal)
     min_substantive_length: usize,

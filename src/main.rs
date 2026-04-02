@@ -394,6 +394,7 @@ async fn run_attacks_and_display(
 
     let mut attack_config = attacks::AttackConfig::default();
     attack_config.max_payloads = limit;
+    attack_config.concurrency = app_config.request.concurrency;
     attack_config.request_config = providers::RequestConfig {
         temperature: 0.7,
         max_tokens: 1024,
