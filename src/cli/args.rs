@@ -69,4 +69,12 @@ pub enum Commands {
         /// Path to the JSON report file (e.g. results/2026-04-02_14-30.json)
         file: std::path::PathBuf,
     },
+
+    /// Compare results from multiple sessions side by side (one per provider)
+    Compare {
+        /// JSON report files to compare (e.g. results/..._deepseek.json results/..._yandexgpt.json)
+        /// If omitted, auto-loads all files from the results/ directory
+        #[arg(value_name = "FILE")]
+        files: Vec<std::path::PathBuf>,
+    },
 }

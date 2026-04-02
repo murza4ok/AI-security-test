@@ -32,6 +32,33 @@ pub fn default_output_path(provider_id: &str) -> PathBuf {
     PathBuf::from(format!("results/{}_{}.json", timestamp, provider_id))
 }
 
+/// Load all JSON session files from the results/ directory, sorted by modification time.
+pub fn load_all_results() -> Result<Vec<crate::engine::session::TestSession>> {
+    let mut sessions = Vec::new();
+
+    let mut entries: Vec<_> = std::fs::read_dir("results")
+        .context("Cannot read results/ directory")?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("json"))
+        .collect();
+
+    // Sort oldest → newest by modification time
+    entries.sort_by_key(|e| {
+        e.metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+    });
+
+    for entry in entries {
+        match load_json_report(&entry.path()) {
+            Ok(s) => sessions.push(s),
+            Err(e) => eprintln!("  Skipping {}: {}", entry.path().display(), e),
+        }
+    }
+
+    Ok(sessions)
+}
+
 /// Load a previously saved session from a JSON file.
 pub fn load_json_report(path: &Path) -> Result<crate::engine::session::TestSession> {
     let content = std::fs::read_to_string(path)

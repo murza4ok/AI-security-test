@@ -83,6 +83,106 @@ pub fn print_session_summary(session: &TestSession) {
     println!();
 }
 
+/// Print a side-by-side comparison table for multiple sessions (one per provider).
+pub fn print_comparison_table(sessions: &[TestSession]) {
+    if sessions.is_empty() {
+        println!("  Нет сессий для сравнения.");
+        return;
+    }
+
+    println!();
+    println!("{}", "╔══ СРАВНЕНИЕ ПРОВАЙДЕРОВ ════════════════════════════════╗".cyan());
+    println!();
+
+    // Header: list all providers being compared
+    for (i, s) in sessions.iter().enumerate() {
+        println!(
+            "  {}  {}   {}",
+            format!("[{}]", i + 1).bright_black(),
+            s.provider_name.bold(),
+            s.started_at.format("%Y-%m-%d %H:%M UTC").to_string().bright_black()
+        );
+    }
+    println!();
+
+    // Collect all unique attack categories across all sessions (preserve order)
+    let mut all_categories: Vec<(String, String)> = Vec::new(); // (id, name)
+    for session in sessions {
+        for run in &session.attacks_run {
+            if !all_categories.iter().any(|(id, _)| id == &run.attack_id) {
+                all_categories.push((run.attack_id.clone(), run.attack_name.clone()));
+            }
+        }
+    }
+
+    // Build table: first column = category, then one column per provider
+    let mut table = Table::new();
+
+    // Header row
+    let mut header = vec![Cell::new("Категория атаки").add_attribute(Attribute::Bold)];
+    for s in sessions {
+        header.push(Cell::new(&s.provider_name).add_attribute(Attribute::Bold));
+    }
+    table.set_header(header);
+
+    // One row per attack category
+    for (attack_id, attack_name) in &all_categories {
+        let mut row = vec![Cell::new(attack_name)];
+        for session in sessions {
+            if let Some(run) = session.attacks_run.iter().find(|r| &r.attack_id == attack_id) {
+                let scoreable = run.payloads_tested - run.informational_count;
+                let pct = if scoreable > 0 {
+                    (run.success_count as f32 / scoreable as f32) * 100.0
+                } else {
+                    0.0
+                };
+                let cell_text = format!(
+                    "{}% ({}/{})",
+                    pct as u32, run.success_count, run.payloads_tested
+                );
+                row.push(if pct > 0.0 {
+                    Cell::new(cell_text).fg(Color::Red)
+                } else {
+                    Cell::new(cell_text).fg(Color::Green)
+                });
+            } else {
+                row.push(Cell::new("—").fg(Color::DarkGrey));
+            }
+        }
+        table.add_row(row);
+    }
+
+    // Totals row
+    let mut totals_row = vec![Cell::new("ИТОГО").add_attribute(Attribute::Bold)];
+    for session in sessions {
+        let s = &session.summary;
+        let scoreable = s.total_payloads - s.total_informational;
+        let pct = if scoreable > 0 {
+            (s.total_success as f32 / scoreable as f32) * 100.0
+        } else {
+            0.0
+        };
+        let cell_text = format!(
+            "{}% ({}/{})",
+            pct as u32, s.total_success, s.total_payloads
+        );
+        totals_row.push(
+            Cell::new(cell_text)
+                .add_attribute(Attribute::Bold)
+                .fg(if pct > 0.0 { Color::Red } else { Color::Green }),
+        );
+    }
+    table.add_row(totals_row);
+
+    println!("{}", table);
+    println!(
+        "  {}",
+        "* Bypass % считается только по L2/L3 payload'ам (L0 исключены)"
+            .bright_black()
+    );
+    println!();
+}
+
 /// Print detailed results for a single attack run (truncated preview).
 pub fn print_attack_details(run: &AttackRun) {
     println!();

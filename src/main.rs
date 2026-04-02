@@ -117,39 +117,20 @@ async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> 
                 println!("  See {} for all available options.", ".env.example".cyan());
             }
             3 => {
-                // Find the most recently modified JSON in results/
-                let latest = std::fs::read_dir("results")
-                    .ok()
-                    .and_then(|entries| {
-                        let mut files: Vec<_> = entries
-                            .filter_map(|e| e.ok())
-                            .filter(|e| {
-                                e.path().extension().and_then(|x| x.to_str()) == Some("json")
-                            })
-                            .collect();
-                        // Sort by modification time ascending, take last
-                        files.sort_by_key(|e| {
-                            e.metadata()
-                                .and_then(|m| m.modified())
-                                .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                        });
-                        files.into_iter().last().map(|e| e.path())
-                    });
-
-                match latest {
-                    Some(path) => {
-                        println!("  Loading: {}", path.display().to_string().cyan());
-                        match reporting::json_report::load_json_report(&path) {
-                            Ok(session) => {
-                                reporting::terminal_report::print_session_review(&session);
-                            }
-                            Err(e) => {
-                                eprintln!("  Failed to load report: {}", e);
-                            }
-                        }
+                // Load all sessions from results/ and show comparison or single summary
+                match reporting::json_report::load_all_results() {
+                    Ok(sessions) if sessions.is_empty() => {
+                        println!("  Нет отчётов в results/. Сначала запустите атаки.");
                     }
-                    None => {
-                        println!("  No reports found in results/. Run an attack first.");
+                    Ok(sessions) if sessions.len() == 1 => {
+                        reporting::terminal_report::print_session_summary(&sessions[0]);
+                    }
+                    Ok(sessions) => {
+                        // Multiple sessions — show comparison table across providers
+                        reporting::terminal_report::print_comparison_table(&sessions);
+                    }
+                    Err(e) => {
+                        eprintln!("  Ошибка загрузки отчётов: {}", e);
                     }
                 }
             }
@@ -184,7 +165,31 @@ async fn run_command(cmd: Commands, cli: Cli, app_config: config::AppConfig) -> 
     match cmd {
         Commands::Review { file } => {
             let session = reporting::json_report::load_json_report(&file)?;
+            // Show summary table first, then full response-level detail
+            reporting::terminal_report::print_session_summary(&session);
             reporting::terminal_report::print_session_review(&session);
+        }
+
+        Commands::Compare { files } => {
+            display::print_banner();
+            let sessions: Vec<_> = if files.is_empty() {
+                // Auto-load all files from results/
+                reporting::json_report::load_all_results()?
+            } else {
+                files
+                    .iter()
+                    .map(|p| reporting::json_report::load_json_report(p))
+                    .collect::<anyhow::Result<Vec<_>>>()?
+            };
+
+            if sessions.is_empty() {
+                println!("  Нет файлов для сравнения. Запустите атаки сначала.");
+            } else if sessions.len() == 1 {
+                println!("  Найдена только одна сессия — показываю одиночную таблицу.");
+                reporting::terminal_report::print_session_summary(&sessions[0]);
+            } else {
+                reporting::terminal_report::print_comparison_table(&sessions);
+            }
         }
 
         Commands::Check => {
