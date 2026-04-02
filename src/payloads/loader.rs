@@ -3,6 +3,8 @@
 //! Reads TOML files from the `payloads/<category>/` directory and returns
 //! structured `Payload` objects. Each TOML file maps to one `PayloadFile`.
 
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

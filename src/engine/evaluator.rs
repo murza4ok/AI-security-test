@@ -8,7 +8,6 @@
 
 use crate::payloads::loader::Payload;
 use crate::providers::traits::LLMResponse;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 /// The outcome of evaluating a single LLM response.

@@ -3,6 +3,8 @@
 //! Payloads can contain `{{variable}}` placeholders that get substituted
 //! at runtime. This allows reusable templates with per-run context injection.
 
+#![allow(dead_code)]
+
 use anyhow::Result;
 use handlebars::Handlebars;
 use serde_json::Value;

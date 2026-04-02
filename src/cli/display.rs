@@ -3,6 +3,8 @@
 //! Centralised colour palette and formatting utilities so that
 //! the rest of the codebase doesn't scatter colour codes everywhere.
 
+#![allow(dead_code)]
+
 use owo_colors::OwoColorize;
 
 // ── Colour-coded labels ───────────────────────────────────────────────────────
@@ -62,6 +64,38 @@ pub fn print_section(title: &str) {
 /// Print a subsection header (lighter weight)
 pub fn print_subsection(title: &str) {
     println!("    {}", title.bold());
+}
+
+/// Print a compact usage/help reference shown when running without subcommand.
+pub fn print_usage_hint() {
+    println!("  {}", "ИСПОЛЬЗОВАНИЕ".bold().bright_blue());
+    println!();
+    println!("  {}  {}",
+        "ai-sec run -a <категория>".cyan(),
+        "— запустить атаку (можно несколько: -a jailbreaking -a extraction)");
+    println!("  {}     {}",
+        "ai-sec list".cyan(),
+        "— список всех категорий атак с описаниями");
+    println!("  {}  {}",
+        "ai-sec explain <id>".cyan(),
+        "— объяснение техники атаки");
+    println!("  {}    {}",
+        "ai-sec check".cyan(),
+        "— проверка подключения к провайдеру");
+    println!();
+    println!("  {}  {}",
+        "-a jailbreaking".yellow(),
+        "prompt_injection  extraction  goal_hijacking");
+    println!("  {}  {}",
+        "               ".yellow(),
+        "token_attacks     many_shot   context_manipulation");
+    println!();
+    println!("  {}",
+        "──────────────────────────────────────────────────────────".bright_black());
+    println!("  {} {}",
+        "Провайдер".bright_black(),
+        "задаётся через .env (DEEPSEEK_API_KEY, YANDEX_API_KEY, …)".bright_black());
+    println!();
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────────

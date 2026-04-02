@@ -63,6 +63,7 @@ async fn main() -> Result<()> {
 async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> {
     display::print_banner();
     display::print_disclaimer();
+    display::print_usage_hint();
 
     let provider = build_provider(&cli.provider, &app_config)?;
     println!(
@@ -257,13 +258,33 @@ async fn run_attacks_and_display(
     let runner = AttackRunner::new(app_config.request.delay_between_requests);
 
     // Callback called after each individual payload result
+    let current_category = std::sync::Mutex::new(String::new());
+
     let on_result = |attack_id: &str, result: &attacks::AttackResult| {
-        let _ = attack_id;
+        // Print category header when attack group changes
+        {
+            let mut current = current_category.lock().unwrap();
+            if current.as_str() != attack_id {
+                *current = attack_id.to_string();
+                let name = attacks::registry::find_attack(attack_id)
+                    .map(|a| a.name().to_string())
+                    .unwrap_or_else(|| attack_id.to_string());
+                display::print_section(&name);
+            }
+        }
+
+        // Print result label
         match result.evaluation.label() {
             "REFUSED" => display::print_refused(&result.payload_name),
             "BYPASS" => display::print_success(&result.payload_name),
             "PARTIAL" => display::print_partial(&result.payload_name),
             _ => display::print_error(&result.payload_name),
+        }
+
+        // Print response preview (~150 chars)
+        if !result.response_received.is_empty() {
+            let preview = display::truncate(&result.response_received, 150);
+            println!("    {}", preview.dimmed());
         }
     };
 
@@ -326,14 +347,44 @@ fn build_provider(
                         "Ollama not configured (missing OLLAMA_MODEL in .env)"
                     )
                 }),
+            "deepseek" => config
+                .deepseek
+                .as_ref()
+                .map(|c| {
+                    Arc::new(providers::deepseek::DeepSeekProvider::from_config(c))
+                        as Arc<dyn providers::LLMProvider>
+                })
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "DeepSeek not configured (missing DEEPSEEK_API_KEY in .env)"
+                    )
+                }),
+            "yandexgpt" => config
+                .yandexgpt
+                .as_ref()
+                .map(|c| {
+                    Arc::new(providers::yandexgpt::YandexGptProvider::from_config(c))
+                        as Arc<dyn providers::LLMProvider>
+                })
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "YandexGPT not configured (missing YANDEX_API_KEY / YANDEX_FOLDER_ID in .env)"
+                    )
+                }),
             other => anyhow::bail!(
-                "Unknown provider '{}'. Valid: openai, anthropic, ollama",
+                "Unknown provider '{}'. Valid: openai, anthropic, ollama, deepseek, yandexgpt",
                 other
             ),
         };
     }
 
     // Auto-select: pick the first configured provider
+    if let Some(c) = &config.deepseek {
+        return Ok(Arc::new(providers::deepseek::DeepSeekProvider::from_config(c)));
+    }
+    if let Some(c) = &config.yandexgpt {
+        return Ok(Arc::new(providers::yandexgpt::YandexGptProvider::from_config(c)));
+    }
     if let Some(c) = &config.anthropic {
         return Ok(Arc::new(providers::anthropic::AnthropicProvider::from_config(c)));
     }
