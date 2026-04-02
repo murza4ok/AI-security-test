@@ -18,5 +18,6 @@ docs/
 .DS_Store
 Thumbs.db
 
-# Test result exports
+# Test result exports (auto-saved to results/ or explicit --output)
 result*.json
+results/

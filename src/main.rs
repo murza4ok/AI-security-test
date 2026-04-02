@@ -79,14 +79,19 @@ async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> 
         match selection {
             0 => {
                 // Run all attacks
-                run_attacks_and_display(
+                if let Some(s) = run_attacks_and_display(
                     attacks::registry::all_attacks(),
                     provider.as_ref(),
                     &loader,
                     &app_config,
                     None,
                 )
-                .await?;
+                .await?
+                {
+                    let path = reporting::json_report::default_output_path();
+                    reporting::json_report::write_json_report(&s, &path)?;
+                    println!("  Report saved to: {}", path.display().to_string().green());
+                }
             }
             1 => {
                 // Select attack categories via checkbox menu
@@ -99,14 +104,19 @@ async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> 
                     .iter()
                     .filter_map(|id| attacks::registry::find_attack(id))
                     .collect();
-                run_attacks_and_display(
+                if let Some(s) = run_attacks_and_display(
                     selected_attacks,
                     provider.as_ref(),
                     &loader,
                     &app_config,
                     None,
                 )
-                .await?;
+                .await?
+                {
+                    let path = reporting::json_report::default_output_path();
+                    reporting::json_report::write_json_report(&s, &path)?;
+                    println!("  Report saved to: {}", path.display().to_string().green());
+                }
             }
             2 => {
                 println!();
@@ -228,8 +238,9 @@ async fn run_command(cmd: Commands, cli: Cli, app_config: config::AppConfig) -> 
                 run_attacks_and_display(selected, provider.as_ref(), &loader, &app_config, limit)
                     .await?;
 
-            // Write JSON report if requested
-            if let (Some(path), Some(s)) = (output, session) {
+            // Save JSON report: use --output path if given, otherwise auto-generate
+            if let Some(s) = session {
+                let path = output.unwrap_or_else(reporting::json_report::default_output_path);
                 reporting::json_report::write_json_report(&s, &path)?;
                 println!(
                     "  Report saved to: {}",
