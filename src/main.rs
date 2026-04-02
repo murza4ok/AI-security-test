@@ -63,6 +63,7 @@ async fn main() -> Result<()> {
 async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> {
     display::print_banner();
     display::print_disclaimer();
+    display::print_usage_hint();
 
     let provider = build_provider(&cli.provider, &app_config)?;
     println!(
