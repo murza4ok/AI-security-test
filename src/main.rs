@@ -124,7 +124,44 @@ async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> 
                 println!("  See {} for all available options.", ".env.example".cyan());
             }
             3 => {
-                println!("  No saved session available yet. Run an attack first.");
+                // Find the most recently modified JSON in results/
+                let latest = std::fs::read_dir("results")
+                    .ok()
+                    .and_then(|entries| {
+                        let mut files: Vec<_> = entries
+                            .filter_map(|e| e.ok())
+                            .filter(|e| {
+                                e.path().extension().and_then(|x| x.to_str()) == Some("json")
+                            })
+                            .collect();
+                        // Sort by modification time descending
+                        files.sort_by_key(|e| {
+                            e.metadata()
+                                .and_then(|m| m.modified())
+                                .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                        });
+                        files.into_iter().last().map(|e| e.path())
+                    });
+
+                match latest {
+                    Some(path) => {
+                        println!(
+                            "  Loading: {}",
+                            path.display().to_string().cyan()
+                        );
+                        match reporting::json_report::load_json_report(&path) {
+                            Ok(session) => {
+                                reporting::terminal_report::print_session_review(&session);
+                            }
+                            Err(e) => {
+                                eprintln!("  Failed to load report: {}", e);
+                            }
+                        }
+                    }
+                    None => {
+                        println!("  No reports found in results/. Run an attack first.");
+                    }
+                }
             }
             4 => {
                 // Educational mode
