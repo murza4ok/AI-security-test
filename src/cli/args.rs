@@ -63,4 +63,10 @@ pub enum Commands {
 
     /// Verify connectivity and credentials for all configured providers
     Check,
+
+    /// Display a saved JSON report in human-readable format for manual review
+    Review {
+        /// Path to the JSON report file (e.g. results/2026-04-02_14-30.json)
+        file: std::path::PathBuf,
+    },
 }

@@ -67,7 +67,7 @@ pub fn print_session_summary(session: &TestSession) {
     println!("{}", table);
 }
 
-/// Print detailed results for a single attack run.
+/// Print detailed results for a single attack run (truncated preview).
 pub fn print_attack_details(run: &AttackRun) {
     println!();
     println!("{}", format!("── {} Details ──", run.attack_name).bold().cyan());
@@ -89,9 +89,131 @@ pub fn print_attack_details(run: &AttackRun) {
             result.latency_ms
         );
 
-        // Print a truncated preview of the response
         let preview = crate::cli::display::truncate(&result.response_received, 120);
         println!("     Response: {}", preview.dimmed());
         println!();
     }
+}
+
+/// Print a full human-readable review of a session — for manual analysis.
+/// Shows the complete response text for every result, nicely formatted.
+pub fn print_session_review(session: &TestSession) {
+    println!();
+    println!("{}", "╔══ REVIEW MODE ══════════════════════════════════════════╗".bright_blue());
+    println!(
+        "  Session: {}   Provider: {}",
+        session.started_at.format("%Y-%m-%d %H:%M UTC"),
+        session.provider_name.bold()
+    );
+    println!("{}", "╚═════════════════════════════════════════════════════════╝".bright_blue());
+
+    for run in &session.attacks_run {
+        println!();
+        println!(
+            "{}",
+            format!(
+                "  ▶  {}  ({}/{} refused, {}/{} bypass)",
+                run.attack_name.bold(),
+                run.refused_count, run.payloads_tested,
+                run.success_count, run.payloads_tested,
+            )
+            .cyan()
+        );
+        println!("  {}", "─".repeat(60).bright_black());
+
+        for (i, result) in run.results.iter().enumerate() {
+            let label = result.evaluation.label();
+            let styled_label = match label {
+                "REFUSED" => format!(" REFUSED ").on_green().black().bold().to_string(),
+                "BYPASS"  => format!(" BYPASS  ").on_red().white().bold().to_string(),
+                "PARTIAL" => format!(" PARTIAL ").on_yellow().black().bold().to_string(),
+                _         => format!(" UNKNOWN ").on_bright_black().white().to_string(),
+            };
+
+            println!();
+            println!(
+                "  {}  {}  {}  {} ms",
+                format!("[{}]", i + 1).bright_black(),
+                styled_label,
+                result.payload_name.bold(),
+                result.latency_ms,
+            );
+
+            // Show matched evaluation signals
+            match &result.evaluation {
+                crate::engine::evaluator::EvaluationResult::Refused { matched_phrases, confidence } => {
+                    println!(
+                        "       {} confidence: {:.0}%  signals: {}",
+                        "↳".green(),
+                        confidence * 100.0,
+                        matched_phrases.join(", ").dimmed()
+                    );
+                }
+                crate::engine::evaluator::EvaluationResult::Success { matched_phrases, confidence } => {
+                    println!(
+                        "       {} confidence: {:.0}%  signals: {}",
+                        "↳".red(),
+                        confidence * 100.0,
+                        matched_phrases.join(", ").dimmed()
+                    );
+                }
+                crate::engine::evaluator::EvaluationResult::Partial { notes } => {
+                    println!("       {} {}", "↳".yellow(), notes.dimmed());
+                }
+                crate::engine::evaluator::EvaluationResult::Inconclusive => {
+                    println!("       {} no signals matched", "↳".bright_black());
+                }
+            }
+
+            // Full response text, wrapped at 80 chars
+            println!();
+            println!("  {}", "PROMPT:".bright_black().bold());
+            for line in wrap_text(&result.prompt_sent, 74) {
+                println!("    {}", line.bright_black());
+            }
+            println!();
+            println!("  {}", "RESPONSE:".bold());
+            if result.response_received.is_empty() {
+                println!("    {}", "(empty)".bright_black().italic());
+            } else {
+                for line in wrap_text(&result.response_received, 74) {
+                    println!("    {}", line);
+                }
+            }
+            println!();
+            println!("  {}", "─".repeat(60).bright_black());
+        }
+    }
+
+    println!();
+    println!("{}", "  ✓  End of review.".bright_blue().bold());
+    println!();
+}
+
+/// Wrap text at `width` characters, preserving existing newlines.
+fn wrap_text(text: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    for paragraph in text.lines() {
+        if paragraph.is_empty() {
+            lines.push(String::new());
+            continue;
+        }
+        // Simple word-wrap
+        let mut current = String::new();
+        for word in paragraph.split_whitespace() {
+            if current.is_empty() {
+                current.push_str(word);
+            } else if current.len() + 1 + word.len() <= width {
+                current.push(' ');
+                current.push_str(word);
+            } else {
+                lines.push(current.clone());
+                current = word.to_string();
+            }
+        }
+        if !current.is_empty() {
+            lines.push(current);
+        }
+    }
+    lines
 }

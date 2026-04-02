@@ -31,3 +31,12 @@ pub fn default_output_path() -> PathBuf {
     let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
     PathBuf::from(format!("results/{}.json", timestamp))
 }
+
+/// Load a previously saved session from a JSON file.
+pub fn load_json_report(path: &Path) -> Result<crate::engine::session::TestSession> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read report: {}", path.display()))?;
+
+    serde_json::from_str(&content)
+        .with_context(|| format!("Failed to parse JSON report: {}", path.display()))
+}

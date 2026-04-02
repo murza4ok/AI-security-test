@@ -155,6 +155,11 @@ async fn run_interactive(cli: Cli, app_config: config::AppConfig) -> Result<()> 
 /// Command mode: parse subcommand and execute directly.
 async fn run_command(cmd: Commands, cli: Cli, app_config: config::AppConfig) -> Result<()> {
     match cmd {
+        Commands::Review { file } => {
+            let session = reporting::json_report::load_json_report(&file)?;
+            reporting::terminal_report::print_session_review(&session);
+        }
+
         Commands::Check => {
             display::print_banner();
             println!("{}", "  Checking provider connectivity...".bold());
