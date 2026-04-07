@@ -34,6 +34,11 @@ pub fn print_info(msg: &str) {
     println!("  {} {}", "  INFO   ".bright_blue(), msg);
 }
 
+/// Print an informational result (L0 payload — model answered public knowledge correctly)
+pub fn print_informational(msg: &str) {
+    println!("  {} {}", "○ INFO   ".bright_black().bold(), msg);
+}
+
 // ── Section headers ───────────────────────────────────────────────────────────
 
 /// Print a prominent banner (used at startup)

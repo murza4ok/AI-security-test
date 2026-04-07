@@ -1,48 +1,49 @@
 //! YandexGPT API provider.
 //!
 //! Uses the Yandex Foundation Models API (completions endpoint).
-//! Auth: either API-key (x-api-key header) or IAM-token (Bearer).
-//! Requires a folder_id to identify the cloud folder.
-//!
-//! Docs: https://yandex.cloud/ru/docs/foundation-models/
 
-use super::traits::{LLMProvider, LLMResponse, ProviderError, RequestConfig};
+use super::{
+    build_http_client, map_transport_error, retry_provider_call,
+    traits::{LLMProvider, LLMResponse, ProviderError, RequestConfig},
+    RetrySettings,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// YandexGPT provider.
 #[derive(Clone)]
 pub struct YandexGptProvider {
     client: reqwest::Client,
-    /// API key or IAM token
     api_key: String,
-    /// Whether api_key is an IAM token (Bearer) or API-key (Api-Key header)
     use_iam_token: bool,
-    /// Cloud folder ID — required for all requests
     folder_id: String,
-    /// Model URI, e.g. "gpt://folder_id/yandexgpt/latest"
     model_uri: String,
-    /// Display name for the UI
     display_name: String,
+    timeout: Duration,
+    retry_settings: RetrySettings,
 }
 
 impl YandexGptProvider {
-    pub fn from_config(config: &crate::config::YandexGptConfig) -> Self {
+    pub fn from_config(
+        config: &crate::config::YandexGptConfig,
+        timeout: Duration,
+        retry_settings: RetrySettings,
+    ) -> Self {
         let model_uri = format!("gpt://{}/{}", config.folder_id, config.model);
         let display_name = format!("YandexGPT {}", config.model);
         YandexGptProvider {
-            client: reqwest::Client::new(),
+            client: build_http_client(timeout),
             api_key: config.api_key.clone(),
             use_iam_token: config.use_iam_token,
             folder_id: config.folder_id.clone(),
             model_uri,
             display_name,
+            timeout,
+            retry_settings,
         }
     }
 }
-
-// ── YandexGPT request/response shapes ───────────────────────────────────────
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,7 +58,7 @@ struct YandexRequest {
 struct CompletionOptions {
     stream: bool,
     temperature: f32,
-    max_tokens: String, // YandexGPT expects maxTokens as string
+    max_tokens: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -91,8 +92,6 @@ struct YandexUsage {
     completion_tokens: Option<String>,
 }
 
-// ── LLMProvider implementation ───────────────────────────────────────────────
-
 #[async_trait]
 impl LLMProvider for YandexGptProvider {
     fn name(&self) -> &str {
@@ -101,6 +100,10 @@ impl LLMProvider for YandexGptProvider {
 
     fn id(&self) -> &str {
         "yandexgpt"
+    }
+
+    fn configured_model(&self) -> &str {
+        &self.model_uri
     }
 
     fn supports_system_prompt(&self) -> bool {
@@ -113,99 +116,104 @@ impl LLMProvider for YandexGptProvider {
         user_message: &str,
         config: &RequestConfig,
     ) -> Result<LLMResponse, ProviderError> {
-        let mut messages: Vec<YandexMessage> = Vec::new();
-
-        // YandexGPT поддерживает role: "system"
-        if let Some(system) = system_prompt {
+        retry_provider_call(self.retry_settings, || async {
+            let mut messages: Vec<YandexMessage> = Vec::new();
+            if let Some(system) = system_prompt {
+                messages.push(YandexMessage {
+                    role: "system".to_string(),
+                    text: system.to_string(),
+                });
+            }
             messages.push(YandexMessage {
-                role: "system".to_string(),
-                text: system.to_string(),
+                role: "user".to_string(),
+                text: user_message.to_string(),
             });
-        }
-        messages.push(YandexMessage {
-            role: "user".to_string(),
-            text: user_message.to_string(),
-        });
 
-        let body = YandexRequest {
-            model_uri: self.model_uri.clone(),
-            completion_options: CompletionOptions {
-                stream: false,
-                temperature: config.temperature,
-                max_tokens: config.max_tokens.to_string(),
-            },
-            messages,
-        };
+            let body = YandexRequest {
+                model_uri: self.model_uri.clone(),
+                completion_options: CompletionOptions {
+                    stream: false,
+                    temperature: config.temperature,
+                    max_tokens: config.max_tokens.to_string(),
+                },
+                messages,
+            };
 
-        let url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion";
-        let start = Instant::now();
+            let start = Instant::now();
+            let mut request = self
+                .client
+                .post("https://llm.api.cloud.yandex.net/foundationModels/v1/completion")
+                .json(&body);
 
-        // Авторизация: IAM-токен через Bearer, API-ключ через Api-Key
-        let mut req = self.client.post(url).json(&body);
-        if self.use_iam_token {
-            req = req.bearer_auth(&self.api_key);
-        } else {
-            req = req.header("Authorization", format!("Api-Key {}", self.api_key));
-        }
-        req = req.header("x-folder-id", &self.folder_id);
+            if self.use_iam_token {
+                request = request.bearer_auth(&self.api_key);
+            } else {
+                request = request.header("Authorization", format!("Api-Key {}", self.api_key));
+            }
 
-        let response = req.send().await?;
+            let response = request
+                .header("x-folder-id", &self.folder_id)
+                .send()
+                .await
+                .map_err(|e| map_transport_error(e, self.timeout))?;
 
-        let status = response.status();
-        let latency_ms = start.elapsed().as_millis() as u64;
+            let status = response.status();
+            let latency_ms = start.elapsed().as_millis() as u64;
 
-        if status == 401 || status == 403 {
-            return Err(ProviderError::AuthError);
-        }
-        if status == 429 {
-            return Err(ProviderError::RateLimited { retry_after_secs: 60 });
-        }
-        if !status.is_success() {
-            let msg = response.text().await.unwrap_or_default();
-            return Err(ProviderError::ApiError {
-                status: status.as_u16(),
-                message: msg,
-            });
-        }
+            if status == 401 || status == 403 {
+                return Err(ProviderError::AuthError);
+            }
+            if status == 429 {
+                return Err(ProviderError::RateLimited {
+                    retry_after_secs: 60,
+                });
+            }
+            if !status.is_success() {
+                let msg = response.text().await.unwrap_or_default();
+                return Err(ProviderError::ApiError {
+                    status: status.as_u16(),
+                    message: msg,
+                });
+            }
 
-        let parsed: YandexResponse = response
-            .json()
-            .await
-            .map_err(|e| ProviderError::ParseError(e.to_string()))?;
+            let parsed: YandexResponse = response
+                .json()
+                .await
+                .map_err(|e| ProviderError::ParseError(e.to_string()))?;
 
-        let result = parsed
-            .result
-            .ok_or_else(|| ProviderError::ParseError("No 'result' in response".to_string()))?;
+            let result = parsed
+                .result
+                .ok_or_else(|| ProviderError::ParseError("No 'result' in response".to_string()))?;
 
-        // Берём текст из первой альтернативы
-        let text = result
-            .alternatives
-            .into_iter()
-            .next()
-            .map(|a| a.message.text)
-            .unwrap_or_default();
+            let text = result
+                .alternatives
+                .into_iter()
+                .next()
+                .map(|a| a.message.text)
+                .unwrap_or_default();
 
-        // Парсим токены (YandexGPT возвращает строки)
-        let prompt_tokens = result
-            .usage
-            .as_ref()
-            .and_then(|u| u.input_text_tokens.as_ref())
-            .and_then(|s| s.parse::<u32>().ok());
-        let completion_tokens = result
-            .usage
-            .as_ref()
-            .and_then(|u| u.completion_tokens.as_ref())
-            .and_then(|s| s.parse::<u32>().ok());
+            let prompt_tokens = result
+                .usage
+                .as_ref()
+                .and_then(|u| u.input_text_tokens.as_ref())
+                .and_then(|s| s.parse::<u32>().ok());
+            let completion_tokens = result
+                .usage
+                .as_ref()
+                .and_then(|u| u.completion_tokens.as_ref())
+                .and_then(|s| s.parse::<u32>().ok());
 
-        let model = result.model_version.unwrap_or_else(|| self.model_uri.clone());
-
-        Ok(LLMResponse {
-            text,
-            model,
-            prompt_tokens,
-            completion_tokens,
-            latency_ms,
+            Ok(LLMResponse {
+                text,
+                model: result
+                    .model_version
+                    .unwrap_or_else(|| self.model_uri.clone()),
+                prompt_tokens,
+                completion_tokens,
+                latency_ms,
+            })
         })
+        .await
     }
 
     async fn health_check(&self) -> Result<(), ProviderError> {

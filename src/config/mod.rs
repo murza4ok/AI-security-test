@@ -70,8 +70,18 @@ pub struct YandexGptConfig {
 pub struct RequestSettings {
     /// How long to wait for a single LLM response before timing out
     pub timeout: Duration,
-    /// Delay between consecutive requests to avoid rate limiting
+    /// Delay between attack categories (not individual payloads)
     pub delay_between_requests: Duration,
+    /// Max number of concurrent payload requests per attack category.
+    /// Higher = faster but risks hitting API rate limits.
+    /// Default: 5. Set CONCURRENCY=1 to restore sequential behaviour.
+    pub concurrency: usize,
+    /// Maximum attempts for retryable provider failures.
+    pub retry_max_attempts: u32,
+    /// Base backoff delay for retries.
+    pub retry_base_delay: Duration,
+    /// Maximum backoff delay for retries.
+    pub retry_max_delay: Duration,
 }
 
 impl AppConfig {
@@ -97,8 +107,7 @@ fn load_openai_config() -> Option<OpenAIConfig> {
     }
     Some(OpenAIConfig {
         api_key,
-        model: std::env::var("OPENAI_MODEL")
-            .unwrap_or_else(|_| "gpt-4o".to_string()),
+        model: std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o".to_string()),
         base_url: std::env::var("OPENAI_BASE_URL")
             .unwrap_or_else(|_| "https://api.openai.com/v1".to_string()),
     })
@@ -137,8 +146,7 @@ fn load_deepseek_config() -> Option<DeepSeekConfig> {
     }
     Some(DeepSeekConfig {
         api_key,
-        model: std::env::var("DEEPSEEK_MODEL")
-            .unwrap_or_else(|_| "deepseek-chat".to_string()),
+        model: std::env::var("DEEPSEEK_MODEL").unwrap_or_else(|_| "deepseek-chat".to_string()),
         base_url: std::env::var("DEEPSEEK_BASE_URL")
             .unwrap_or_else(|_| "https://api.deepseek.com/v1".to_string()),
     })
@@ -159,8 +167,7 @@ fn load_yandexgpt_config() -> Option<YandexGptConfig> {
     Some(YandexGptConfig {
         api_key,
         folder_id,
-        model: std::env::var("YANDEX_MODEL")
-            .unwrap_or_else(|_| "yandexgpt/latest".to_string()),
+        model: std::env::var("YANDEX_MODEL").unwrap_or_else(|_| "yandexgpt/latest".to_string()),
         use_iam_token,
     })
 }
@@ -177,8 +184,32 @@ fn load_request_settings() -> Result<RequestSettings> {
         .parse()
         .context("REQUEST_DELAY_MS must be a positive integer")?;
 
+    let concurrency: usize = std::env::var("CONCURRENCY")
+        .unwrap_or_else(|_| "5".to_string())
+        .parse()
+        .context("CONCURRENCY must be a positive integer")?;
+
+    let retry_max_attempts: u32 = std::env::var("RETRY_MAX_ATTEMPTS")
+        .unwrap_or_else(|_| "3".to_string())
+        .parse()
+        .context("RETRY_MAX_ATTEMPTS must be a positive integer")?;
+
+    let retry_base_delay_ms: u64 = std::env::var("RETRY_BASE_DELAY_MS")
+        .unwrap_or_else(|_| "500".to_string())
+        .parse()
+        .context("RETRY_BASE_DELAY_MS must be a positive integer")?;
+
+    let retry_max_delay_ms: u64 = std::env::var("RETRY_MAX_DELAY_MS")
+        .unwrap_or_else(|_| "4000".to_string())
+        .parse()
+        .context("RETRY_MAX_DELAY_MS must be a positive integer")?;
+
     Ok(RequestSettings {
         timeout: Duration::from_secs(timeout_secs),
         delay_between_requests: Duration::from_millis(delay_ms),
+        concurrency: concurrency.max(1),
+        retry_max_attempts: retry_max_attempts.max(1),
+        retry_base_delay: Duration::from_millis(retry_base_delay_ms),
+        retry_max_delay: Duration::from_millis(retry_max_delay_ms.max(retry_base_delay_ms)),
     })
 }

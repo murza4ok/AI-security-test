@@ -4,10 +4,14 @@
 //! No API key required — just a running Ollama server.
 //! Uses the /api/chat endpoint which supports the messages format.
 
-use super::traits::{LLMProvider, LLMResponse, ProviderError, RequestConfig};
+use super::{
+    build_http_client, map_transport_error, retry_provider_call,
+    traits::{LLMProvider, LLMResponse, ProviderError, RequestConfig},
+    RetrySettings,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// Ollama local provider.
 #[derive(Clone)]
@@ -16,21 +20,39 @@ pub struct OllamaProvider {
     base_url: String,
     model: String,
     display_name: String,
+    timeout: Duration,
+    retry_settings: RetrySettings,
 }
 
 impl OllamaProvider {
-    pub fn new(base_url: String, model: String) -> Self {
+    pub fn new(
+        base_url: String,
+        model: String,
+        timeout: Duration,
+        retry_settings: RetrySettings,
+    ) -> Self {
         let display_name = format!("Ollama {}", model);
         OllamaProvider {
-            client: reqwest::Client::new(),
+            client: build_http_client(timeout),
             base_url,
             model,
             display_name,
+            timeout,
+            retry_settings,
         }
     }
 
-    pub fn from_config(config: &crate::config::OllamaConfig) -> Self {
-        Self::new(config.base_url.clone(), config.model.clone())
+    pub fn from_config(
+        config: &crate::config::OllamaConfig,
+        timeout: Duration,
+        retry_settings: RetrySettings,
+    ) -> Self {
+        Self::new(
+            config.base_url.clone(),
+            config.model.clone(),
+            timeout,
+            retry_settings,
+        )
     }
 }
 
@@ -73,6 +95,10 @@ impl LLMProvider for OllamaProvider {
         "ollama"
     }
 
+    fn configured_model(&self) -> &str {
+        &self.model
+    }
+
     fn supports_system_prompt(&self) -> bool {
         // Ollama chat endpoint supports "system" role messages
         true
@@ -84,68 +110,72 @@ impl LLMProvider for OllamaProvider {
         user_message: &str,
         config: &RequestConfig,
     ) -> Result<LLMResponse, ProviderError> {
-        let mut messages: Vec<OllamaMessage> = Vec::new();
+        retry_provider_call(self.retry_settings, || async {
+            let mut messages: Vec<OllamaMessage> = Vec::new();
 
-        // Ollama accepts system messages as role "system"
-        if let Some(system) = system_prompt {
+            if let Some(system) = system_prompt {
+                messages.push(OllamaMessage {
+                    role: "system".to_string(),
+                    content: system.to_string(),
+                });
+            }
             messages.push(OllamaMessage {
-                role: "system".to_string(),
-                content: system.to_string(),
+                role: "user".to_string(),
+                content: user_message.to_string(),
             });
-        }
-        messages.push(OllamaMessage {
-            role: "user".to_string(),
-            content: user_message.to_string(),
-        });
 
-        let body = OllamaChatRequest {
-            model: self.model.clone(),
-            messages,
-            stream: false, // We want a single response, not a stream
-            options: OllamaOptions {
-                temperature: config.temperature,
-                num_predict: config.max_tokens,
-            },
-        };
+            let body = OllamaChatRequest {
+                model: self.model.clone(),
+                messages,
+                stream: false,
+                options: OllamaOptions {
+                    temperature: config.temperature,
+                    num_predict: config.max_tokens,
+                },
+            };
 
-        let url = format!("{}/api/chat", self.base_url);
-        let start = Instant::now();
+            let url = format!("{}/api/chat", self.base_url);
+            let start = Instant::now();
 
-        let response = self
-            .client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| {
-                // Connection refused typically means Ollama is not running
-                if e.is_connect() {
-                    ProviderError::NotConfigured
-                } else {
-                    ProviderError::NetworkError(e)
-                }
-            })?;
+            let response = self
+                .client
+                .post(&url)
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| {
+                    if e.is_connect() {
+                        ProviderError::NotConfigured
+                    } else {
+                        map_transport_error(e, self.timeout)
+                    }
+                })?;
 
-        let latency_ms = start.elapsed().as_millis() as u64;
+            let latency_ms = start.elapsed().as_millis() as u64;
 
-        if !response.status().is_success() {
-            let status = response.status().as_u16();
-            let msg = response.text().await.unwrap_or_default();
-            return Err(ProviderError::ApiError { status, message: msg });
-        }
+            if !response.status().is_success() {
+                let status = response.status().as_u16();
+                let msg = response.text().await.unwrap_or_default();
+                return Err(ProviderError::ApiError {
+                    status,
+                    message: msg,
+                });
+            }
 
-        let parsed: OllamaChatResponse = response
-            .json()
-            .await
-            .map_err(|e| ProviderError::ParseError(e.to_string()))?;
+            let parsed: OllamaChatResponse = response
+                .json()
+                .await
+                .map_err(|e| ProviderError::ParseError(e.to_string()))?;
 
-        Ok(LLMResponse {
-            text: parsed.message.content,
-            model: self.model.clone(),
-            prompt_tokens: None,   // Ollama doesn't always report token usage
-            completion_tokens: None,
-            latency_ms,
+            Ok(LLMResponse {
+                text: parsed.message.content,
+                model: self.model.clone(),
+                prompt_tokens: None,
+                completion_tokens: None,
+                latency_ms,
+            })
         })
+        .await
     }
 
     async fn health_check(&self) -> Result<(), ProviderError> {

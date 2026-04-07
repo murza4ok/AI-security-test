@@ -63,4 +63,43 @@ pub enum Commands {
 
     /// Verify connectivity and credentials for all configured providers
     Check,
+
+    /// Display a saved JSON report in human-readable format for manual review
+    Review {
+        /// Path to the JSON report file (e.g. results/2026-04-02_14-30.json)
+        file: std::path::PathBuf,
+    },
+
+    /// Compare results from multiple sessions side by side (one per provider)
+    Compare {
+        /// JSON report files to compare (e.g. results/..._deepseek.json results/..._yandexgpt.json)
+        /// If omitted, auto-loads all files from the results/ directory
+        #[arg(value_name = "FILE")]
+        files: Vec<std::path::PathBuf>,
+    },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_command_parses_model_override() {
+        let cli = Cli::parse_from([
+            "ai-sec",
+            "run",
+            "--attack",
+            "jailbreaking",
+            "--model",
+            "gpt-4.1-mini",
+        ]);
+
+        match cli.command {
+            Some(Commands::Run { model, attack, .. }) => {
+                assert_eq!(attack, vec!["jailbreaking"]);
+                assert_eq!(model.as_deref(), Some("gpt-4.1-mini"));
+            }
+            other => panic!("unexpected command: {:?}", other),
+        }
+    }
 }
