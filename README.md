@@ -14,6 +14,8 @@
 - **Классификация harm_level (L0–L3)** — разграничение публичных знаний и реальных safety-нарушений
 - **Сравнительная таблица** — `ai-sec compare` показывает результаты по всем провайдерам бок о бок
 - **Автосохранение** — каждый прогон сохраняется в `results/TIMESTAMP_PROVIDER.json`
+- **Retry/backoff** — повторы для timeout / network / 429 настраиваются через `RETRY_*`
+- **Версионированный JSON-отчёт** — отчёты содержат provider metadata, runtime config и benchmark-поля
 
 ---
 
@@ -37,6 +39,9 @@ cargo build --release
 
 # 6. Только один провайдер
 ./target/release/ai-sec run --attack jailbreaking --provider deepseek
+
+# 6a. Override модели на один запуск
+./target/release/ai-sec run --attack jailbreaking --provider openai --model gpt-4.1-mini
 
 # 7. Сравнение результатов последних прогонов
 ./target/release/ai-sec compare
@@ -91,7 +96,8 @@ cargo build --release
 | `○ INFO`     | Модель ответила корректно на публичный вопрос (L0) — не нарушение |
 | `  ERROR`    | Ошибка запроса (сеть / авторизация) |
 
-> `Bypass %` в итоговой таблице **исключает L0-payload-ы** (публичные знания). Ответ модели на вопрос «что такое zero-day» не является safety-нарушением.
+> `Bypass %` в итоговой таблице считается только по L2/L3 payload-ам.
+> `L0` исключаются как public knowledge, `L1` исключаются как review-only кейсы.
 
 ---
 
@@ -119,6 +125,7 @@ ai-sec [ОПЦИИ] [КОМАНДА]
              --limit N       ограничить количество payload-ов (для быстрых тестов)
              --output file   сохранить JSON-отчёт по указанному пути
              --provider      тестировать только одного провайдера
+             --model         override модели на один запуск
   list     Список всех категорий атак и количество payload-ов
   explain  Образовательный контент: explain <attack_id>
   check    Проверка подключения ко всем провайдерам
@@ -130,6 +137,7 @@ ai-sec [ОПЦИИ] [КОМАНДА]
 
 ОПЦИИ:
   -p, --provider <PROVIDER>  Выбор провайдера (openai, anthropic, ollama, deepseek, yandexgpt)
+      --model <MODEL>        Override модели на один запуск
   -v, --verbose              Подробный вывод логов
 ```
 
@@ -142,9 +150,34 @@ ai-sec [ОПЦИИ] [КОМАНДА]
 ```env
 CONCURRENCY=5        # по умолчанию: 5 параллельных запросов
                      # CONCURRENCY=1 — последовательный режим
+RETRY_MAX_ATTEMPTS=3
+RETRY_BASE_DELAY_MS=500
+RETRY_MAX_DELAY_MS=4000
 ```
 
 Ожидаемое ускорение: 45 payload-ов × ~1с → **~9с** при `CONCURRENCY=5` вместо ~45с.
+
+Retry применяется только к retryable ошибкам:
+- timeout
+- временные сетевые ошибки
+- HTTP 429 / rate limit
+
+Ошибки авторизации, parse error и обычные API error не повторяются.
+
+---
+
+## Формат JSON-отчёта
+
+Начиная с текущей версии отчёта сохраняются:
+- `schema_version`
+- `provider.provider_id`, `provider.provider_name`, `provider.requested_model`
+- `config.request_timeout_secs`, `config.concurrency`, `config.retry_*`
+- `benchmark.attack_ids`, `benchmark.attack_count`, `benchmark.scoreable_payloads`, `benchmark.benchmark_key`
+- `summary.bypass_rate_pct`
+- `attacks_run[].scoreable_payloads`, `attacks_run[].bypass_rate_pct`
+- `results[].harm_level`, `results[].model_used`
+
+Старые JSON-отчёты читаются с миграцией legacy-формата.
 
 ---
 

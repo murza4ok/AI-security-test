@@ -13,7 +13,7 @@ pub mod registry;
 pub mod token_attacks;
 
 use crate::engine::evaluator::EvaluationResult;
-use crate::payloads::loader::{Payload, PayloadLoader};
+use crate::payloads::loader::{HarmLevel, Payload, PayloadLoader};
 use crate::providers::traits::{LLMProvider, RequestConfig};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -41,12 +41,18 @@ pub struct AttackResult {
     pub prompt_sent: String,
     /// Raw text received from the model
     pub response_received: String,
+    /// Harm classification of the payload that produced this result
+    #[serde(default)]
+    pub harm_level: HarmLevel,
     /// How we evaluated this response
     pub evaluation: EvaluationResult,
     /// Wall-clock latency for this request
     pub latency_ms: u64,
     /// Token usage if reported by the provider
     pub tokens_used: Option<u32>,
+    /// Which model actually generated the response, if reported by the provider
+    #[serde(default)]
+    pub model_used: Option<String>,
 }
 
 /// Configuration for a single attack run.

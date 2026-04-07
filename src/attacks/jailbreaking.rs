@@ -90,7 +90,10 @@ MITIGATIONS:
             ResourceLink {
                 title: "OWASP LLM02: Insecure Output Handling".to_string(),
                 source: "OWASP Top 10 for LLM Applications".to_string(),
-                url: Some("https://owasp.org/www-project-top-10-for-large-language-model-applications/".to_string()),
+                url: Some(
+                    "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
+                        .to_string(),
+                ),
             },
         ]
     }
@@ -119,18 +122,21 @@ MITIGATIONS:
                 )
                 .await;
 
-            let (response_text, latency_ms, tokens_used, evaluation) = match response {
+            let (response_text, latency_ms, tokens_used, evaluation, model_used) = match response {
                 Ok(r) => {
                     let lat = start.elapsed().as_millis() as u64;
-                    let tok = r.completion_tokens.map(|c| r.prompt_tokens.unwrap_or(0) + c);
+                    let tok = r
+                        .completion_tokens
+                        .map(|c| r.prompt_tokens.unwrap_or(0) + c);
                     let eval = evaluator.evaluate(&r, payload);
-                    (r.text, lat, tok, eval)
+                    (r.text, lat, tok, eval, Some(r.model))
                 }
                 Err(e) => (
                     format!("ERROR: {}", e),
                     start.elapsed().as_millis() as u64,
                     None,
                     crate::engine::evaluator::EvaluationResult::Inconclusive,
+                    None,
                 ),
             };
 
@@ -139,9 +145,11 @@ MITIGATIONS:
                 payload_name: payload.name.clone(),
                 prompt_sent: payload.prompt.clone(),
                 response_received: response_text,
+                harm_level: payload.harm_level.clone(),
                 evaluation,
                 latency_ms,
                 tokens_used,
+                model_used,
             };
             on_result(&result);
             results.push(result);

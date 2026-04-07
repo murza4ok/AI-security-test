@@ -79,6 +79,9 @@ pub trait LLMProvider: Send + Sync {
     /// Short identifier used in CLI and reports (e.g., "openai", "anthropic", "ollama")
     fn id(&self) -> &str;
 
+    /// Configured model name requested for this provider instance.
+    fn configured_model(&self) -> &str;
+
     /// Whether this provider accepts a dedicated system prompt field.
     /// If false, the system prompt is prepended to the user message.
     fn supports_system_prompt(&self) -> bool;

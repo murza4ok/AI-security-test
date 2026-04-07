@@ -78,3 +78,28 @@ pub enum Commands {
         files: Vec<std::path::PathBuf>,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_command_parses_model_override() {
+        let cli = Cli::parse_from([
+            "ai-sec",
+            "run",
+            "--attack",
+            "jailbreaking",
+            "--model",
+            "gpt-4.1-mini",
+        ]);
+
+        match cli.command {
+            Some(Commands::Run { model, attack, .. }) => {
+                assert_eq!(attack, vec!["jailbreaking"]);
+                assert_eq!(model.as_deref(), Some("gpt-4.1-mini"));
+            }
+            other => panic!("unexpected command: {:?}", other),
+        }
+    }
+}

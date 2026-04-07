@@ -4,10 +4,14 @@
 //! endpoint (Azure OpenAI, local proxies) via `base_url` override.
 //! Handles 429 rate-limit responses with a configurable retry delay.
 
-use super::traits::{LLMProvider, LLMResponse, ProviderError, RequestConfig};
+use super::{
+    build_http_client, map_transport_error, retry_provider_call,
+    traits::{LLMProvider, LLMResponse, ProviderError, RequestConfig},
+    RetrySettings,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// OpenAI provider instance. Cheap to clone — the inner reqwest::Client
 /// is already Arc-based and reuses the connection pool.
@@ -18,28 +22,44 @@ pub struct OpenAIProvider {
     model: String,
     base_url: String,
     display_name: String,
+    timeout: Duration,
+    retry_settings: RetrySettings,
 }
 
 impl OpenAIProvider {
     /// Construct a new OpenAI provider from explicit parameters.
     /// Use `from_config()` for the normal startup path.
-    pub fn new(api_key: String, model: String, base_url: String) -> Self {
+    pub fn new(
+        api_key: String,
+        model: String,
+        base_url: String,
+        timeout: Duration,
+        retry_settings: RetrySettings,
+    ) -> Self {
         let display_name = format!("OpenAI {}", model);
         OpenAIProvider {
-            client: reqwest::Client::new(),
+            client: build_http_client(timeout),
             api_key,
             model,
             base_url,
             display_name,
+            timeout,
+            retry_settings,
         }
     }
 
     /// Construct from the application config.
-    pub fn from_config(config: &crate::config::OpenAIConfig) -> Self {
+    pub fn from_config(
+        config: &crate::config::OpenAIConfig,
+        timeout: Duration,
+        retry_settings: RetrySettings,
+    ) -> Self {
         Self::new(
             config.api_key.clone(),
             config.model.clone(),
             config.base_url.clone(),
+            timeout,
+            retry_settings,
         )
     }
 }
@@ -98,6 +118,10 @@ impl LLMProvider for OpenAIProvider {
         "openai"
     }
 
+    fn configured_model(&self) -> &str {
+        &self.model
+    }
+
     fn supports_system_prompt(&self) -> bool {
         // OpenAI chat completions supports the "system" role natively
         true
@@ -109,83 +133,85 @@ impl LLMProvider for OpenAIProvider {
         user_message: &str,
         config: &RequestConfig,
     ) -> Result<LLMResponse, ProviderError> {
-        // Build message list; add system message only if a prompt was provided
-        let mut messages: Vec<ChatMessage> = Vec::new();
-        if let Some(system) = system_prompt {
+        retry_provider_call(self.retry_settings, || async {
+            // Build message list; add system message only if a prompt was provided
+            let mut messages: Vec<ChatMessage> = Vec::new();
+            if let Some(system) = system_prompt {
+                messages.push(ChatMessage {
+                    role: "system".to_string(),
+                    content: system.to_string(),
+                });
+            }
             messages.push(ChatMessage {
-                role: "system".to_string(),
-                content: system.to_string(),
+                role: "user".to_string(),
+                content: user_message.to_string(),
             });
-        }
-        messages.push(ChatMessage {
-            role: "user".to_string(),
-            content: user_message.to_string(),
-        });
 
-        let body = ChatRequest {
-            model: self.model.clone(),
-            messages,
-            temperature: config.temperature,
-            max_tokens: config.max_tokens,
-        };
+            let body = ChatRequest {
+                model: self.model.clone(),
+                messages,
+                temperature: config.temperature,
+                max_tokens: config.max_tokens,
+            };
 
-        let url = format!("{}/chat/completions", self.base_url);
-        let start = Instant::now();
+            let url = format!("{}/chat/completions", self.base_url);
+            let start = Instant::now();
 
-        let response = self
-            .client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&body)
-            .send()
-            .await?;
+            let response = self
+                .client
+                .post(&url)
+                .bearer_auth(&self.api_key)
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| map_transport_error(e, self.timeout))?;
 
-        let status = response.status();
-        let latency_ms = start.elapsed().as_millis() as u64;
+            let status = response.status();
+            let latency_ms = start.elapsed().as_millis() as u64;
 
-        // Handle common HTTP error codes before trying to parse the body
-        if status == 401 {
-            return Err(ProviderError::AuthError);
-        }
-        if status == 429 {
-            // Try to read retry-after header; default to 60s if missing
-            let retry_after = response
-                .headers()
-                .get("retry-after")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(60);
-            return Err(ProviderError::RateLimited {
-                retry_after_secs: retry_after,
-            });
-        }
-        if !status.is_success() {
-            let msg = response.text().await.unwrap_or_default();
-            return Err(ProviderError::ApiError {
-                status: status.as_u16(),
-                message: msg,
-            });
-        }
+            if status == 401 {
+                return Err(ProviderError::AuthError);
+            }
+            if status == 429 {
+                let retry_after = response
+                    .headers()
+                    .get("retry-after")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(60);
+                return Err(ProviderError::RateLimited {
+                    retry_after_secs: retry_after,
+                });
+            }
+            if !status.is_success() {
+                let msg = response.text().await.unwrap_or_default();
+                return Err(ProviderError::ApiError {
+                    status: status.as_u16(),
+                    message: msg,
+                });
+            }
 
-        let parsed: ChatResponse = response
-            .json()
-            .await
-            .map_err(|e| ProviderError::ParseError(e.to_string()))?;
+            let parsed: ChatResponse = response
+                .json()
+                .await
+                .map_err(|e| ProviderError::ParseError(e.to_string()))?;
 
-        let text = parsed
-            .choices
-            .into_iter()
-            .next()
-            .map(|c| c.message.content)
-            .unwrap_or_default();
+            let text = parsed
+                .choices
+                .into_iter()
+                .next()
+                .map(|c| c.message.content)
+                .unwrap_or_default();
 
-        Ok(LLMResponse {
-            text,
-            model: parsed.model,
-            prompt_tokens: parsed.usage.as_ref().map(|u| u.prompt_tokens),
-            completion_tokens: parsed.usage.as_ref().map(|u| u.completion_tokens),
-            latency_ms,
+            Ok(LLMResponse {
+                text,
+                model: parsed.model,
+                prompt_tokens: parsed.usage.as_ref().map(|u| u.prompt_tokens),
+                completion_tokens: parsed.usage.as_ref().map(|u| u.completion_tokens),
+                latency_ms,
+            })
         })
+        .await
     }
 
     async fn health_check(&self) -> Result<(), ProviderError> {

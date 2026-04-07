@@ -5,7 +5,7 @@
 #![allow(dead_code)]
 
 use crate::engine::session::{AttackRun, TestSession};
-use comfy_table::{Table, Cell, Color, Attribute};
+use comfy_table::{Attribute, Cell, Color, Table};
 use owo_colors::OwoColorize;
 
 /// Print a summary table for the entire session.
@@ -19,7 +19,11 @@ pub fn print_session_summary(session: &TestSession) {
         "  Session: {}",
         session.started_at.format("%Y-%m-%d %H:%M:%S UTC")
     );
-    println!("  Provider: {}", session.provider_name.bold());
+    println!("  Provider: {}", session.provider.provider_name.bold());
+    println!(
+        "  Requested model: {}",
+        session.provider.requested_model.bold()
+    );
     println!("  Attacks run: {}", session.attacks_run.len());
     println!();
 
@@ -34,13 +38,7 @@ pub fn print_session_summary(session: &TestSession) {
     ]);
 
     for run in &session.attacks_run {
-        // Bypass % is calculated only over L2/L3 payloads (excluding L0 informational)
-        let scoreable = run.payloads_tested - run.informational_count;
-        let bypass_pct = if scoreable > 0 {
-            (run.success_count as f32 / scoreable as f32) * 100.0
-        } else {
-            0.0
-        };
+        let bypass_pct = run.bypass_rate_pct();
         let bypass_cell = if bypass_pct > 0.0 {
             Cell::new(format!("{:.0}%", bypass_pct)).fg(Color::Red)
         } else {
@@ -59,7 +57,7 @@ pub fn print_session_summary(session: &TestSession) {
 
     // Totals row — bypass % excludes L0 informational payloads
     let s = &session.summary;
-    let scoreable_total = s.total_payloads - s.total_informational;
+    let scoreable_total = s.scoreable_payloads();
     let total_pct = if scoreable_total > 0 {
         (s.total_success as f32 / scoreable_total as f32) * 100.0
     } else {
@@ -91,7 +89,10 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
     }
 
     println!();
-    println!("{}", "╔══ СРАВНЕНИЕ ПРОВАЙДЕРОВ ════════════════════════════════╗".cyan());
+    println!(
+        "{}",
+        "╔══ СРАВНЕНИЕ ПРОВАЙДЕРОВ ════════════════════════════════╗".cyan()
+    );
     println!();
 
     // Header: list all providers being compared
@@ -99,8 +100,11 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
         println!(
             "  {}  {}   {}",
             format!("[{}]", i + 1).bright_black(),
-            s.provider_name.bold(),
-            s.started_at.format("%Y-%m-%d %H:%M UTC").to_string().bright_black()
+            s.provider.provider_name.bold(),
+            s.started_at
+                .format("%Y-%m-%d %H:%M UTC")
+                .to_string()
+                .bright_black()
         );
     }
     println!();
@@ -121,7 +125,7 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
     // Header row
     let mut header = vec![Cell::new("Категория атаки").add_attribute(Attribute::Bold)];
     for s in sessions {
-        header.push(Cell::new(&s.provider_name).add_attribute(Attribute::Bold));
+        header.push(Cell::new(&s.provider.provider_name).add_attribute(Attribute::Bold));
     }
     table.set_header(header);
 
@@ -129,8 +133,12 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
     for (attack_id, attack_name) in &all_categories {
         let mut row = vec![Cell::new(attack_name)];
         for session in sessions {
-            if let Some(run) = session.attacks_run.iter().find(|r| &r.attack_id == attack_id) {
-                let scoreable = run.payloads_tested - run.informational_count;
+            if let Some(run) = session
+                .attacks_run
+                .iter()
+                .find(|r| &r.attack_id == attack_id)
+            {
+                let scoreable = run.scoreable_payloads();
                 let pct = if scoreable > 0 {
                     (run.success_count as f32 / scoreable as f32) * 100.0
                 } else {
@@ -156,16 +164,13 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
     let mut totals_row = vec![Cell::new("ИТОГО").add_attribute(Attribute::Bold)];
     for session in sessions {
         let s = &session.summary;
-        let scoreable = s.total_payloads - s.total_informational;
+        let scoreable = s.scoreable_payloads();
         let pct = if scoreable > 0 {
             (s.total_success as f32 / scoreable as f32) * 100.0
         } else {
             0.0
         };
-        let cell_text = format!(
-            "{}% ({}/{})",
-            pct as u32, s.total_success, s.total_payloads
-        );
+        let cell_text = format!("{}% ({}/{})", pct as u32, s.total_success, s.total_payloads);
         totals_row.push(
             Cell::new(cell_text)
                 .add_attribute(Attribute::Bold)
@@ -177,8 +182,7 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
     println!("{}", table);
     println!(
         "  {}",
-        "* Bypass % считается только по L2/L3 payload'ам (L0 исключены)"
-            .bright_black()
+        "* Bypass % считается только по L2/L3 payload'ам (L0 исключены)".bright_black()
     );
     println!();
 }
@@ -186,16 +190,19 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
 /// Print detailed results for a single attack run (truncated preview).
 pub fn print_attack_details(run: &AttackRun) {
     println!();
-    println!("{}", format!("── {} Details ──", run.attack_name).bold().cyan());
+    println!(
+        "{}",
+        format!("── {} Details ──", run.attack_name).bold().cyan()
+    );
     println!();
 
     for result in &run.results {
         let label = result.evaluation.label();
         let styled_label = match label {
             "REFUSED" => format!("[{}]", label).green().to_string(),
-            "BYPASS"  => format!("[{}]", label).red().bold().to_string(),
+            "BYPASS" => format!("[{}]", label).red().bold().to_string(),
             "PARTIAL" => format!("[{}]", label).yellow().to_string(),
-            _         => format!("[{}]", label).dimmed().to_string(),
+            _ => format!("[{}]", label).dimmed().to_string(),
         };
 
         println!(
@@ -215,13 +222,19 @@ pub fn print_attack_details(run: &AttackRun) {
 /// Shows the complete response text for every result, nicely formatted.
 pub fn print_session_review(session: &TestSession) {
     println!();
-    println!("{}", "╔══ REVIEW MODE ══════════════════════════════════════════╗".bright_blue());
+    println!(
+        "{}",
+        "╔══ REVIEW MODE ══════════════════════════════════════════╗".bright_blue()
+    );
     println!(
         "  Session: {}   Provider: {}",
         session.started_at.format("%Y-%m-%d %H:%M UTC"),
-        session.provider_name.bold()
+        session.provider.provider_name.bold()
     );
-    println!("{}", "╚═════════════════════════════════════════════════════════╝".bright_blue());
+    println!(
+        "{}",
+        "╚═════════════════════════════════════════════════════════╝".bright_blue()
+    );
 
     for run in &session.attacks_run {
         println!();
@@ -230,8 +243,10 @@ pub fn print_session_review(session: &TestSession) {
             format!(
                 "  ▶  {}  ({}/{} refused, {}/{} bypass)",
                 run.attack_name.bold(),
-                run.refused_count, run.payloads_tested,
-                run.success_count, run.payloads_tested,
+                run.refused_count,
+                run.payloads_tested,
+                run.success_count,
+                run.payloads_tested,
             )
             .cyan()
         );
@@ -241,9 +256,9 @@ pub fn print_session_review(session: &TestSession) {
             let label = result.evaluation.label();
             let styled_label = match label {
                 "REFUSED" => format!(" REFUSED ").on_green().black().bold().to_string(),
-                "BYPASS"  => format!(" BYPASS  ").on_red().white().bold().to_string(),
+                "BYPASS" => format!(" BYPASS  ").on_red().white().bold().to_string(),
                 "PARTIAL" => format!(" PARTIAL ").on_yellow().black().bold().to_string(),
-                _         => format!(" UNKNOWN ").on_bright_black().white().to_string(),
+                _ => format!(" UNKNOWN ").on_bright_black().white().to_string(),
             };
 
             println!();
@@ -257,7 +272,10 @@ pub fn print_session_review(session: &TestSession) {
 
             // Show matched evaluation signals
             match &result.evaluation {
-                crate::engine::evaluator::EvaluationResult::Refused { matched_phrases, confidence } => {
+                crate::engine::evaluator::EvaluationResult::Refused {
+                    matched_phrases,
+                    confidence,
+                } => {
                     println!(
                         "       {} confidence: {:.0}%  signals: {}",
                         "↳".green(),
@@ -265,7 +283,10 @@ pub fn print_session_review(session: &TestSession) {
                         matched_phrases.join(", ").dimmed()
                     );
                 }
-                crate::engine::evaluator::EvaluationResult::Success { matched_phrases, confidence } => {
+                crate::engine::evaluator::EvaluationResult::Success {
+                    matched_phrases,
+                    confidence,
+                } => {
                     println!(
                         "       {} confidence: {:.0}%  signals: {}",
                         "↳".red(),
@@ -277,7 +298,10 @@ pub fn print_session_review(session: &TestSession) {
                     println!("       {} {}", "↳".yellow(), notes.dimmed());
                 }
                 crate::engine::evaluator::EvaluationResult::Informational => {
-                    println!("       {} L0 — public knowledge, answering is correct behaviour", "↳".bright_black());
+                    println!(
+                        "       {} L0 — public knowledge, answering is correct behaviour",
+                        "↳".bright_black()
+                    );
                 }
                 crate::engine::evaluator::EvaluationResult::Inconclusive => {
                     println!("       {} no signals matched", "↳".bright_black());

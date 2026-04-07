@@ -5,7 +5,7 @@
 //! and collects results into a TestSession.
 
 use crate::attacks::{Attack, AttackConfig, AttackResult};
-use crate::engine::session::{AttackRun, TestSession};
+use crate::engine::session::{AttackRun, ProviderMetadata, SessionConfig, TestSession};
 use crate::payloads::loader::PayloadLoader;
 use crate::providers::traits::LLMProvider;
 use anyhow::Result;
@@ -50,14 +50,27 @@ impl AttackRunner {
             .await?;
 
         // Aggregate counts for the summary
-        let refused_count       = results.iter().filter(|r| r.evaluation.is_refused()).count();
-        let success_count       = results.iter().filter(|r| r.evaluation.is_success()).count();
-        let informational_count = results.iter().filter(|r| r.evaluation.is_informational()).count();
+        let refused_count = results.iter().filter(|r| r.evaluation.is_refused()).count();
+        let success_count = results.iter().filter(|r| r.evaluation.is_success()).count();
+        let informational_count = results
+            .iter()
+            .filter(|r| r.evaluation.is_informational())
+            .count();
         let partial_count = results
             .iter()
-            .filter(|r| matches!(r.evaluation, crate::engine::evaluator::EvaluationResult::Partial { .. }))
+            .filter(|r| {
+                matches!(
+                    r.evaluation,
+                    crate::engine::evaluator::EvaluationResult::Partial { .. }
+                )
+            })
             .count();
-        let inconclusive_count = total - refused_count - success_count - partial_count - informational_count;
+        let review_only_count = results
+            .iter()
+            .filter(|r| r.harm_level == crate::payloads::loader::HarmLevel::L1)
+            .count();
+        let inconclusive_count =
+            total - refused_count - success_count - partial_count - informational_count;
 
         Ok(AttackRun {
             attack_id: attack.id().to_string(),
@@ -68,6 +81,9 @@ impl AttackRunner {
             partial_count,
             inconclusive_count,
             informational_count,
+            review_only_count,
+            scoreable_payloads: 0,
+            bypass_rate_pct: 0.0,
             duration_ms: run_start.elapsed().as_millis() as u64,
             results,
         })
@@ -80,9 +96,17 @@ impl AttackRunner {
         provider: &dyn LLMProvider,
         loader: &PayloadLoader,
         config: &AttackConfig,
+        session_config: SessionConfig,
         on_result: impl Fn(&str, &AttackResult) + Send + Sync,
     ) -> Result<TestSession> {
-        let mut session = TestSession::new(provider.name().to_string());
+        let mut session = TestSession::new(
+            ProviderMetadata {
+                provider_id: provider.id().to_string(),
+                provider_name: provider.name().to_string(),
+                requested_model: provider.configured_model().to_string(),
+            },
+            session_config,
+        );
 
         for (i, attack) in attacks.iter().enumerate() {
             // Delay between categories (skip before the first one)
@@ -98,7 +122,13 @@ impl AttackRunner {
             };
 
             let run = self
-                .run_attack(attack.as_ref(), provider, loader, config, &category_callback)
+                .run_attack(
+                    attack.as_ref(),
+                    provider,
+                    loader,
+                    config,
+                    &category_callback,
+                )
                 .await?;
             session.add_run(run);
         }

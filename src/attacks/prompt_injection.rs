@@ -18,8 +18,12 @@ pub struct PromptInjectionAttack;
 
 #[async_trait]
 impl Attack for PromptInjectionAttack {
-    fn id(&self) -> &str { "prompt_injection" }
-    fn name(&self) -> &str { "Direct Prompt Injection" }
+    fn id(&self) -> &str {
+        "prompt_injection"
+    }
+    fn name(&self) -> &str {
+        "Direct Prompt Injection"
+    }
 
     fn description(&self) -> &str {
         "Injects new instructions into user-controlled input to override the model's \
@@ -64,14 +68,18 @@ MITIGATIONS:
                 url: Some("https://arxiv.org/abs/2211.09527".to_string()),
             },
             ResourceLink {
-                title: "Prompt Injection Attacks and Defenses in LLM-Integrated Applications".to_string(),
+                title: "Prompt Injection Attacks and Defenses in LLM-Integrated Applications"
+                    .to_string(),
                 source: "Liu et al., 2023".to_string(),
                 url: Some("https://arxiv.org/abs/2310.12815".to_string()),
             },
             ResourceLink {
                 title: "OWASP LLM01: Prompt Injection".to_string(),
                 source: "OWASP Top 10 for LLM Applications".to_string(),
-                url: Some("https://owasp.org/www-project-top-10-for-large-language-model-applications/".to_string()),
+                url: Some(
+                    "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
+                        .to_string(),
+                ),
             },
         ]
     }
@@ -131,30 +139,35 @@ pub(crate) async fn run_payloads(
                     )
                     .await;
 
-                let (response_text, latency_ms, tokens_used, evaluation) = match response {
-                    Ok(r) => {
-                        let lat = start.elapsed().as_millis() as u64;
-                        let tok =
-                            r.completion_tokens.map(|c| r.prompt_tokens.unwrap_or(0) + c);
-                        let eval = evaluator.evaluate(&r, payload);
-                        (r.text, lat, tok, eval)
-                    }
-                    Err(e) => (
-                        format!("ERROR: {}", e),
-                        start.elapsed().as_millis() as u64,
-                        None,
-                        EvaluationResult::Inconclusive,
-                    ),
-                };
+                let (response_text, latency_ms, tokens_used, evaluation, model_used) =
+                    match response {
+                        Ok(r) => {
+                            let lat = start.elapsed().as_millis() as u64;
+                            let tok = r
+                                .completion_tokens
+                                .map(|c| r.prompt_tokens.unwrap_or(0) + c);
+                            let eval = evaluator.evaluate(&r, payload);
+                            (r.text, lat, tok, eval, Some(r.model))
+                        }
+                        Err(e) => (
+                            format!("ERROR: {}", e),
+                            start.elapsed().as_millis() as u64,
+                            None,
+                            EvaluationResult::Inconclusive,
+                            None,
+                        ),
+                    };
 
                 let result = AttackResult {
                     payload_id: payload.id.clone(),
                     payload_name: payload.name.clone(),
                     prompt_sent: payload.prompt.clone(),
                     response_received: response_text,
+                    harm_level: payload.harm_level.clone(),
                     evaluation,
                     latency_ms,
                     tokens_used,
+                    model_used: model_used,
                 };
 
                 (i, result)
