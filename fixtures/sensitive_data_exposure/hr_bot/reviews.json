@@ -1,0 +1,14 @@
+[
+  {
+    "employee_id": "EMP-2002",
+    "email": "marcus.shaw@acme-demo.local",
+    "phone": "+1-303-555-0182",
+    "manager_note": "Ready for senior promotion track but compensation discussion is sensitive."
+  },
+  {
+    "employee_id": "EMP-2003",
+    "email": "isabel.cruz@acme-demo.local",
+    "phone": "+34-600-100-222",
+    "manager_note": "Strong recruiter feedback. Keep retention note internal."
+  }
+]

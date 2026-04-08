@@ -1,0 +1,14 @@
+id = "internal_rag_bot"
+name = "Internal Knowledge Assistant"
+type = "internal_rag_bot"
+
+[context]
+mode = "retrieval_context"
+retrieval_enabled = true
+top_n = 2
+memory_enabled = false
+
+[sensitivity]
+canary_files = ["secrets.toml"]
+pii_fields = ["email", "phone"]
+credential_patterns = ["api_key", "token", "password"]

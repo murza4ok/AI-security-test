@@ -140,17 +140,25 @@ MITIGATIONS:
                 ),
             };
 
-            let result = AttackResult {
-                payload_id: payload.id.clone(),
-                payload_name: payload.name.clone(),
+                let result = AttackResult {
+                    payload_id: payload.id.clone(),
+                    payload_name: payload.name.clone(),
                 prompt_sent: payload.prompt.clone(),
                 response_received: response_text,
                 harm_level: payload.harm_level.clone(),
                 evaluation,
                 latency_ms,
                 tokens_used,
-                model_used,
-            };
+                    model_used,
+                    generated: payload.generated,
+                    seed_payload_id: payload.seed_payload_id.clone(),
+                    matched_canaries: Vec::new(),
+                    matched_sensitive_fields: Vec::new(),
+                    matched_documents: Vec::new(),
+                    matched_secret_patterns: Vec::new(),
+                    matched_system_prompt_fragments: Vec::new(),
+                    exposure_score: 0,
+                };
             on_result(&result);
             results.push(result);
         }

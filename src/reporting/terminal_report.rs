@@ -1,20 +1,15 @@
 //! Terminal result reporter.
-//!
-//! Formats session results as coloured tables and text for display in the terminal.
 
 #![allow(dead_code)]
 
 use crate::engine::session::{AttackRun, TestSession};
+use crate::reporting::json_report::SavedSessionInfo;
 use comfy_table::{Attribute, Cell, Color, Table};
 use owo_colors::OwoColorize;
 
-/// Print a summary table for the entire session.
 pub fn print_session_summary(session: &TestSession) {
     println!();
-    println!(
-        "{}",
-        "╔══ ATTACK SUMMARY ═══════════════════════════════════════╗".cyan()
-    );
+    println!("{}", "╔══ ATTACK SUMMARY ════════════════════════════════".cyan());
     println!(
         "  Session: {}",
         session.started_at.format("%Y-%m-%d %H:%M:%S UTC")
@@ -25,6 +20,22 @@ pub fn print_session_summary(session: &TestSession) {
         session.provider.requested_model.bold()
     );
     println!("  Attacks run: {}", session.attacks_run.len());
+    if session.summary.total_generated_payloads > 0 {
+        println!(
+            "  Generated payloads: {}",
+            session.summary.total_generated_payloads
+        );
+    }
+    if let Some(scenario_name) = &session.scenario.scenario_name {
+        println!("  Scenario: {}", scenario_name.bold());
+        println!(
+            "  Exposure score: {} | leaked canaries: {} | leaked pii fields: {} | leaked documents: {}",
+            session.scenario.exposure_score,
+            session.scenario.leaked_canaries.len(),
+            session.scenario.leaked_pii_fields.len(),
+            session.scenario.leaked_documents.len()
+        );
+    }
     println!();
 
     let mut table = Table::new();
@@ -34,83 +45,125 @@ pub fn print_session_summary(session: &TestSession) {
         Cell::new("Partial").add_attribute(Attribute::Bold),
         Cell::new("Bypass").add_attribute(Attribute::Bold),
         Cell::new("Info(L0)").add_attribute(Attribute::Bold),
-        Cell::new("Bypass %*").add_attribute(Attribute::Bold),
+        Cell::new("Generated").add_attribute(Attribute::Bold),
+        Cell::new("Bypass %").add_attribute(Attribute::Bold),
     ]);
 
     for run in &session.attacks_run {
         let bypass_pct = run.bypass_rate_pct();
-        let bypass_cell = if bypass_pct > 0.0 {
-            Cell::new(format!("{:.0}%", bypass_pct)).fg(Color::Red)
-        } else {
-            Cell::new("0%").fg(Color::Green)
-        };
-
         table.add_row(vec![
             Cell::new(&run.attack_name),
             Cell::new(format!("{}/{}", run.refused_count, run.payloads_tested)).fg(Color::Green),
             Cell::new(format!("{}/{}", run.partial_count, run.payloads_tested)).fg(Color::Yellow),
             Cell::new(format!("{}/{}", run.success_count, run.payloads_tested)).fg(Color::Red),
-            Cell::new(format!("{}", run.informational_count)).fg(Color::DarkGrey),
-            bypass_cell,
+            Cell::new(run.informational_count).fg(Color::DarkGrey),
+            Cell::new(run.generated_payloads).fg(Color::Cyan),
+            Cell::new(format!("{:.0}%", bypass_pct))
+                .fg(if bypass_pct > 0.0 { Color::Red } else { Color::Green }),
         ]);
     }
 
-    // Totals row — bypass % excludes L0 informational payloads
-    let s = &session.summary;
-    let scoreable_total = s.scoreable_payloads();
-    let total_pct = if scoreable_total > 0 {
-        (s.total_success as f32 / scoreable_total as f32) * 100.0
-    } else {
-        0.0
-    };
+    let summary = &session.summary;
     table.add_row(vec![
         Cell::new("TOTAL").add_attribute(Attribute::Bold),
-        Cell::new(format!("{}/{}", s.total_refused, s.total_payloads)).fg(Color::Green),
-        Cell::new(format!("{}/{}", s.total_partial, s.total_payloads)).fg(Color::Yellow),
-        Cell::new(format!("{}/{}", s.total_success, s.total_payloads)).fg(Color::Red),
-        Cell::new(format!("{}", s.total_informational)).fg(Color::DarkGrey),
-        Cell::new(format!("{:.0}%", total_pct)).add_attribute(Attribute::Bold),
+        Cell::new(format!("{}/{}", summary.total_refused, summary.total_payloads))
+            .fg(Color::Green),
+        Cell::new(format!("{}/{}", summary.total_partial, summary.total_payloads))
+            .fg(Color::Yellow),
+        Cell::new(format!("{}/{}", summary.total_success, summary.total_payloads)).fg(Color::Red),
+        Cell::new(summary.total_informational).fg(Color::DarkGrey),
+        Cell::new(summary.total_generated_payloads).fg(Color::Cyan),
+        Cell::new(format!("{:.0}%", summary.bypass_rate_pct)).add_attribute(Attribute::Bold),
     ]);
 
     println!("{}", table);
     println!(
         "  {}",
-        "* Bypass % считается только по L2/L3 payload'ам (L0 public knowledge исключены)"
+        "* Bypass % counts only L2/L3 payloads; L0 and L1 are excluded from scoring"
             .bright_black()
     );
     println!();
 }
 
-/// Print a side-by-side comparison table for multiple sessions (one per provider).
-pub fn print_comparison_table(sessions: &[TestSession]) {
+pub fn print_saved_sessions_overview(sessions: &[SavedSessionInfo]) {
     if sessions.is_empty() {
-        println!("  Нет сессий для сравнения.");
+        println!("  No saved sessions found in results/.");
         return;
     }
 
     println!();
-    println!(
-        "{}",
-        "╔══ СРАВНЕНИЕ ПРОВАЙДЕРОВ ════════════════════════════════╗".cyan()
-    );
+    println!("{}", "╔══ SAVED SESSIONS ════════════════════════════════".cyan());
     println!();
 
-    // Header: list all providers being compared
-    for (i, s) in sessions.iter().enumerate() {
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("#").add_attribute(Attribute::Bold),
+        Cell::new("Started").add_attribute(Attribute::Bold),
+        Cell::new("Provider").add_attribute(Attribute::Bold),
+        Cell::new("Model").add_attribute(Attribute::Bold),
+        Cell::new("Attacks").add_attribute(Attribute::Bold),
+        Cell::new("Payloads").add_attribute(Attribute::Bold),
+        Cell::new("Generated").add_attribute(Attribute::Bold),
+        Cell::new("Exposure").add_attribute(Attribute::Bold),
+        Cell::new("File").add_attribute(Attribute::Bold),
+    ]);
+
+    for (index, saved) in sessions.iter().enumerate() {
+        let summary = &saved.session.summary;
+        let file_name = saved
+            .path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("<unknown>");
+
+        table.add_row(vec![
+            Cell::new(index + 1),
+            Cell::new(saved.session.started_at.format("%Y-%m-%d %H:%M UTC").to_string()),
+            Cell::new(&saved.session.provider.provider_name),
+            Cell::new(&saved.session.provider.requested_model),
+            Cell::new(saved.session.attacks_run.len()),
+            Cell::new(summary.total_payloads),
+            Cell::new(summary.total_generated_payloads).fg(Color::Cyan),
+            Cell::new(saved.session.scenario.exposure_score),
+            Cell::new(file_name),
+        ]);
+    }
+
+    println!("{}", table);
+    println!();
+}
+
+pub fn print_comparison_table(sessions: &[TestSession]) {
+    if sessions.is_empty() {
+        println!("  No sessions available for comparison.");
+        return;
+    }
+
+    println!();
+    println!("{}", "╔══ SESSION COMPARISON ════════════════════════════".cyan());
+    println!();
+
+    for (index, session) in sessions.iter().enumerate() {
+        let exposure_suffix = if session.scenario.exposure_score > 0 {
+            format!(" | exposure {}", session.scenario.exposure_score)
+        } else {
+            String::new()
+        };
         println!(
-            "  {}  {}   {}",
-            format!("[{}]", i + 1).bright_black(),
-            s.provider.provider_name.bold(),
-            s.started_at
+            "  [{}] {}   {}{}",
+            index + 1,
+            session.provider.provider_name.bold(),
+            session
+                .started_at
                 .format("%Y-%m-%d %H:%M UTC")
                 .to_string()
-                .bright_black()
+                .bright_black(),
+            exposure_suffix.bright_black()
         );
     }
     println!();
 
-    // Collect all unique attack categories across all sessions (preserve order)
-    let mut all_categories: Vec<(String, String)> = Vec::new(); // (id, name)
+    let mut all_categories: Vec<(String, String)> = Vec::new();
     for session in sessions {
         for run in &session.attacks_run {
             if !all_categories.iter().any(|(id, _)| id == &run.attack_id) {
@@ -119,129 +172,84 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
         }
     }
 
-    // Build table: first column = category, then one column per provider
     let mut table = Table::new();
-
-    // Header row
-    let mut header = vec![Cell::new("Категория атаки").add_attribute(Attribute::Bold)];
-    for s in sessions {
-        header.push(Cell::new(&s.provider.provider_name).add_attribute(Attribute::Bold));
+    let mut header = vec![Cell::new("Attack Category").add_attribute(Attribute::Bold)];
+    for session in sessions {
+        header.push(Cell::new(&session.provider.provider_name).add_attribute(Attribute::Bold));
     }
     table.set_header(header);
 
-    // One row per attack category
     for (attack_id, attack_name) in &all_categories {
         let mut row = vec![Cell::new(attack_name)];
         for session in sessions {
             if let Some(run) = session
                 .attacks_run
                 .iter()
-                .find(|r| &r.attack_id == attack_id)
+                .find(|run| &run.attack_id == attack_id)
             {
-                let scoreable = run.scoreable_payloads();
-                let pct = if scoreable > 0 {
-                    (run.success_count as f32 / scoreable as f32) * 100.0
-                } else {
-                    0.0
-                };
-                let cell_text = format!(
-                    "{}% ({}/{})",
-                    pct as u32, run.success_count, run.payloads_tested
+                row.push(
+                    Cell::new(format!(
+                        "{:.0}% ({}/{})",
+                        run.bypass_rate_pct, run.success_count, run.payloads_tested
+                    ))
+                    .fg(if run.bypass_rate_pct > 0.0 {
+                        Color::Red
+                    } else {
+                        Color::Green
+                    }),
                 );
-                row.push(if pct > 0.0 {
-                    Cell::new(cell_text).fg(Color::Red)
-                } else {
-                    Cell::new(cell_text).fg(Color::Green)
-                });
             } else {
-                row.push(Cell::new("—").fg(Color::DarkGrey));
+                row.push(Cell::new("-").fg(Color::DarkGrey));
             }
         }
         table.add_row(row);
     }
 
-    // Totals row
-    let mut totals_row = vec![Cell::new("ИТОГО").add_attribute(Attribute::Bold)];
-    for session in sessions {
-        let s = &session.summary;
-        let scoreable = s.scoreable_payloads();
-        let pct = if scoreable > 0 {
-            (s.total_success as f32 / scoreable as f32) * 100.0
-        } else {
-            0.0
-        };
-        let cell_text = format!("{}% ({}/{})", pct as u32, s.total_success, s.total_payloads);
-        totals_row.push(
-            Cell::new(cell_text)
-                .add_attribute(Attribute::Bold)
-                .fg(if pct > 0.0 { Color::Red } else { Color::Green }),
-        );
-    }
-    table.add_row(totals_row);
-
     println!("{}", table);
-    println!(
-        "  {}",
-        "* Bypass % считается только по L2/L3 payload'ам (L0 исключены)".bright_black()
-    );
     println!();
 }
 
-/// Print detailed results for a single attack run (truncated preview).
 pub fn print_attack_details(run: &AttackRun) {
     println!();
-    println!(
-        "{}",
-        format!("── {} Details ──", run.attack_name).bold().cyan()
-    );
+    println!("{}", format!("-- {} Details --", run.attack_name).bold().cyan());
     println!();
 
     for result in &run.results {
-        let label = result.evaluation.label();
-        let styled_label = match label {
-            "REFUSED" => format!("[{}]", label).green().to_string(),
-            "BYPASS" => format!("[{}]", label).red().bold().to_string(),
-            "PARTIAL" => format!("[{}]", label).yellow().to_string(),
-            _ => format!("[{}]", label).dimmed().to_string(),
-        };
-
         println!(
-            "  {} {} — {}ms",
-            styled_label,
+            "  [{}] {} - {}ms",
+            result.evaluation.label(),
             result.payload_name.bold(),
             result.latency_ms
         );
-
         let preview = crate::cli::display::truncate(&result.response_received, 120);
         println!("     Response: {}", preview.dimmed());
         println!();
     }
 }
 
-/// Print a full human-readable review of a session — for manual analysis.
-/// Shows the complete response text for every result, nicely formatted.
 pub fn print_session_review(session: &TestSession) {
     println!();
-    println!(
-        "{}",
-        "╔══ REVIEW MODE ══════════════════════════════════════════╗".bright_blue()
-    );
+    println!("{}", "╔══ REVIEW MODE ═══════════════════════════════════".bright_blue());
     println!(
         "  Session: {}   Provider: {}",
         session.started_at.format("%Y-%m-%d %H:%M UTC"),
         session.provider.provider_name.bold()
     );
-    println!(
-        "{}",
-        "╚═════════════════════════════════════════════════════════╝".bright_blue()
-    );
+    if let Some(scenario_name) = &session.scenario.scenario_name {
+        println!(
+            "  Scenario: {} | exposure {}",
+            scenario_name.bold(),
+            session.scenario.exposure_score
+        );
+    }
+    println!("{}", "╚══════════════════════════════════════════════════".bright_blue());
 
     for run in &session.attacks_run {
         println!();
         println!(
             "{}",
             format!(
-                "  ▶  {}  ({}/{} refused, {}/{} bypass)",
+                "  > {}  ({}/{} refused, {}/{} bypass)",
                 run.attack_name.bold(),
                 run.refused_count,
                 run.payloads_tested,
@@ -250,35 +258,60 @@ pub fn print_session_review(session: &TestSession) {
             )
             .cyan()
         );
-        println!("  {}", "─".repeat(60).bright_black());
+        println!("  {}", "-".repeat(60).bright_black());
 
-        for (i, result) in run.results.iter().enumerate() {
-            let label = result.evaluation.label();
-            let styled_label = match label {
-                "REFUSED" => format!(" REFUSED ").on_green().black().bold().to_string(),
-                "BYPASS" => format!(" BYPASS  ").on_red().white().bold().to_string(),
-                "PARTIAL" => format!(" PARTIAL ").on_yellow().black().bold().to_string(),
-                _ => format!(" UNKNOWN ").on_bright_black().white().to_string(),
-            };
-
-            println!();
+        for (index, result) in run.results.iter().enumerate() {
             println!(
-                "  {}  {}  {}  {} ms",
-                format!("[{}]", i + 1).bright_black(),
-                styled_label,
+                "  [{}] {}  {}  {} ms",
+                index + 1,
+                result.evaluation.label().bold(),
                 result.payload_name.bold(),
                 result.latency_ms,
             );
+            if result.generated {
+                println!(
+                    "       -> generated from seed {}",
+                    result.seed_payload_id.as_deref().unwrap_or("<unknown>").dimmed()
+                );
+            }
+            if !result.matched_canaries.is_empty() {
+                println!("       -> matched canaries: {}", result.matched_canaries.join(", ").red());
+            }
+            if !result.matched_sensitive_fields.is_empty() {
+                println!(
+                    "       -> matched sensitive fields: {}",
+                    result.matched_sensitive_fields.join(", ").yellow()
+                );
+            }
+            if !result.matched_secret_patterns.is_empty() {
+                println!(
+                    "       -> matched secret patterns: {}",
+                    result.matched_secret_patterns.join(", ").red()
+                );
+            }
+            if !result.matched_documents.is_empty() {
+                println!(
+                    "       -> matched documents: {}",
+                    result.matched_documents.join(" | ").yellow()
+                );
+            }
+            if !result.matched_system_prompt_fragments.is_empty() {
+                println!(
+                    "       -> matched system prompt fragments: {}",
+                    result.matched_system_prompt_fragments.join(" | ").yellow()
+                );
+            }
+            if result.exposure_score > 0 {
+                println!("       -> exposure score: {}", result.exposure_score.to_string().red());
+            }
 
-            // Show matched evaluation signals
             match &result.evaluation {
                 crate::engine::evaluator::EvaluationResult::Refused {
                     matched_phrases,
                     confidence,
                 } => {
                     println!(
-                        "       {} confidence: {:.0}%  signals: {}",
-                        "↳".green(),
+                        "       -> confidence: {:.0}%  signals: {}",
                         confidence * 100.0,
                         matched_phrases.join(", ").dimmed()
                     );
@@ -288,27 +321,22 @@ pub fn print_session_review(session: &TestSession) {
                     confidence,
                 } => {
                     println!(
-                        "       {} confidence: {:.0}%  signals: {}",
-                        "↳".red(),
+                        "       -> confidence: {:.0}%  bypass reason: {}",
                         confidence * 100.0,
                         matched_phrases.join(", ").dimmed()
                     );
                 }
                 crate::engine::evaluator::EvaluationResult::Partial { notes } => {
-                    println!("       {} {}", "↳".yellow(), notes.dimmed());
+                    println!("       -> {}", notes.dimmed());
                 }
                 crate::engine::evaluator::EvaluationResult::Informational => {
-                    println!(
-                        "       {} L0 — public knowledge, answering is correct behaviour",
-                        "↳".bright_black()
-                    );
+                    println!("{}", "       -> L0 informational response".dimmed());
                 }
                 crate::engine::evaluator::EvaluationResult::Inconclusive => {
-                    println!("       {} no signals matched", "↳".bright_black());
+                    println!("{}", "       -> no stable leak signal matched".dimmed());
                 }
             }
 
-            // Full response text, wrapped at 80 chars
             println!();
             println!("  {}", "PROMPT:".bright_black().bold());
             for line in wrap_text(&result.prompt_sent, 74) {
@@ -324,16 +352,15 @@ pub fn print_session_review(session: &TestSession) {
                 }
             }
             println!();
-            println!("  {}", "─".repeat(60).bright_black());
+            println!("  {}", "-".repeat(60).bright_black());
         }
     }
 
     println!();
-    println!("{}", "  ✓  End of review.".bright_blue().bold());
+    println!("{}", "  End of review.".bright_blue().bold());
     println!();
 }
 
-/// Wrap text at `width` characters, preserving existing newlines.
 fn wrap_text(text: &str, width: usize) -> Vec<String> {
     let mut lines = Vec::new();
     for paragraph in text.lines() {
@@ -341,7 +368,7 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
             lines.push(String::new());
             continue;
         }
-        // Simple word-wrap
+
         let mut current = String::new();
         for word in paragraph.split_whitespace() {
             if current.is_empty() {
@@ -354,9 +381,11 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
                 current = word.to_string();
             }
         }
+
         if !current.is_empty() {
             lines.push(current);
         }
     }
+
     lines
 }

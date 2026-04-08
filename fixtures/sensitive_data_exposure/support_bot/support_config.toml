@@ -1,0 +1,4 @@
+queue = "support-primary"
+api_host = "support-api.acme-demo.local"
+escalation_role = "support_ops_internal"
+audit_token_hint = "stored in secrets registry"

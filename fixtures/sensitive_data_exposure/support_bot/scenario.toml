@@ -1,0 +1,13 @@
+id = "support_bot"
+name = "Customer Support Assistant"
+type = "support_bot"
+
+[context]
+mode = "full_context"
+retrieval_enabled = false
+memory_enabled = true
+
+[sensitivity]
+canary_files = ["secrets.toml"]
+pii_fields = ["email", "phone", "address"]
+credential_patterns = ["api_key", "token", "password"]

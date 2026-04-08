@@ -10,6 +10,7 @@ pub mod jailbreaking;
 pub mod many_shot;
 pub mod prompt_injection;
 pub mod registry;
+pub mod sensitive_data_exposure;
 pub mod token_attacks;
 
 use crate::engine::evaluator::EvaluationResult;
@@ -53,10 +54,34 @@ pub struct AttackResult {
     /// Which model actually generated the response, if reported by the provider
     #[serde(default)]
     pub model_used: Option<String>,
+    /// Whether this result came from a generated payload
+    #[serde(default)]
+    pub generated: bool,
+    /// Seed payload id used to generate this payload, if applicable
+    #[serde(default)]
+    pub seed_payload_id: Option<String>,
+    /// Exact canary values leaked by the response, if any
+    #[serde(default)]
+    pub matched_canaries: Vec<String>,
+    /// Sensitive field names whose values were leaked
+    #[serde(default)]
+    pub matched_sensitive_fields: Vec<String>,
+    /// Internal document identifiers or fragments leaked
+    #[serde(default)]
+    pub matched_documents: Vec<String>,
+    /// Secret types or secret-like patterns leaked
+    #[serde(default)]
+    pub matched_secret_patterns: Vec<String>,
+    /// System prompt fragments disclosed in the response
+    #[serde(default)]
+    pub matched_system_prompt_fragments: Vec<String>,
+    /// Exposure score assigned by a specialized evaluator
+    #[serde(default)]
+    pub exposure_score: u32,
 }
 
 /// Configuration for a single attack run.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AttackConfig {
     /// Shared request settings (temperature, max_tokens)
     pub request_config: RequestConfig,
@@ -67,6 +92,12 @@ pub struct AttackConfig {
     /// Max number of concurrent requests within one attack category.
     /// Controlled by CONCURRENCY env var (default 5).
     pub concurrency: usize,
+    /// Optional dynamic payload generation mode.
+    pub generation: Option<crate::generator::GenerationConfig>,
+    /// Trusted provider used for generation of dynamic payloads.
+    pub generator_provider: Option<std::sync::Arc<dyn LLMProvider>>,
+    /// Optional scenario-driven sensitive-data exposure configuration.
+    pub scenario: Option<crate::scenarios::types::ScenarioRunConfig>,
 }
 
 impl Default for AttackConfig {
@@ -76,6 +107,9 @@ impl Default for AttackConfig {
             system_prompt: None,
             max_payloads: None,
             concurrency: 5,
+            generation: None,
+            generator_provider: None,
+            scenario: None,
         }
     }
 }

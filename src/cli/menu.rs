@@ -14,7 +14,7 @@ const MENU_ITEMS: &[&str] = &[
     "Run All Attacks",
     "Select Attack Categories",
     "Configure Provider (edit .env)",
-    "View Last Session Report",
+    "Browse Saved Sessions",
     "Educational Mode — Learn About Attacks",
     "Quit",
 ];
@@ -76,4 +76,30 @@ pub fn confirm(prompt: &str) -> Result<bool> {
         .default(0)
         .interact()?;
     Ok(selection == 0)
+}
+
+/// Let the user choose how to work with saved sessions.
+pub fn select_saved_sessions_action() -> Result<usize> {
+    let items = &["Overview only", "Review one session", "Compare all sessions", "Back"];
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Saved sessions")
+        .items(items)
+        .default(0)
+        .interact()?;
+    Ok(selection)
+}
+
+/// Select one saved session by label and return its index.
+pub fn select_saved_session(labels: &[String]) -> Result<Option<usize>> {
+    if labels.is_empty() {
+        return Ok(None);
+    }
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select session")
+        .items(labels)
+        .default(0)
+        .interact()?;
+
+    Ok(Some(selection))
 }

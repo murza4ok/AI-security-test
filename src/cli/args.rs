@@ -50,6 +50,34 @@ pub enum Commands {
         /// Limit number of payloads per attack category (useful for quick tests)
         #[arg(short, long)]
         limit: Option<usize>,
+
+        /// Generate up to N additional payload variants per attack using DeepSeek
+        #[arg(long)]
+        generated: Option<usize>,
+
+        /// Application scenario for scenario-driven attacks such as sensitive_data_exposure
+        #[arg(long)]
+        app_scenario: Option<String>,
+
+        /// Override the default synthetic fixture root
+        #[arg(long)]
+        fixture_root: Option<PathBuf>,
+
+        /// Retrieval mode for scenario-driven attacks: full or subset
+        #[arg(long)]
+        retrieval_mode: Option<String>,
+
+        /// Override the scenario manifest path
+        #[arg(long)]
+        scenario_config: Option<PathBuf>,
+
+        /// Optional tenant identifier for synthetic multi-tenant scenarios
+        #[arg(long)]
+        tenant: Option<String>,
+
+        /// Optional deterministic seed for scenario assembly
+        #[arg(long)]
+        session_seed: Option<String>,
     },
 
     /// List all available attack categories and their payload counts
@@ -77,6 +105,9 @@ pub enum Commands {
         #[arg(value_name = "FILE")]
         files: Vec<std::path::PathBuf>,
     },
+
+    /// Show an overview of saved sessions in results/
+    Sessions,
 }
 
 #[cfg(test)]
@@ -95,9 +126,79 @@ mod tests {
         ]);
 
         match cli.command {
-            Some(Commands::Run { model, attack, .. }) => {
+            Some(Commands::Run {
+                model,
+                attack,
+                generated,
+                app_scenario,
+                ..
+            }) => {
                 assert_eq!(attack, vec!["jailbreaking"]);
                 assert_eq!(model.as_deref(), Some("gpt-4.1-mini"));
+                assert_eq!(generated, None);
+                assert_eq!(app_scenario, None);
+            }
+            other => panic!("unexpected command: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn run_command_parses_generated_variants() {
+        let cli = Cli::parse_from([
+            "ai-sec",
+            "run",
+            "--attack",
+            "prompt_injection",
+            "--generated",
+            "3",
+        ]);
+
+        match cli.command {
+            Some(Commands::Run {
+                attack,
+                generated,
+                app_scenario,
+                ..
+            }) => {
+                assert_eq!(attack, vec!["prompt_injection"]);
+                assert_eq!(generated, Some(3));
+                assert_eq!(app_scenario, None);
+            }
+            other => panic!("unexpected command: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn run_command_parses_sensitive_data_flags() {
+        let cli = Cli::parse_from([
+            "ai-sec",
+            "run",
+            "--attack",
+            "sensitive_data_exposure",
+            "--app-scenario",
+            "support_bot",
+            "--retrieval-mode",
+            "subset",
+            "--tenant",
+            "tenant-a",
+            "--session-seed",
+            "demo",
+        ]);
+
+        match cli.command {
+            Some(Commands::Run {
+                attack,
+                app_scenario,
+                retrieval_mode,
+                tenant,
+                session_seed,
+                ..
+            }) => {
+                assert_eq!(attack, vec!["sensitive_data_exposure"]);
+                assert_eq!(app_scenario.as_deref(), Some("support_bot"));
+                assert_eq!(retrieval_mode.as_deref(), Some("subset"));
+                assert_eq!(tenant.as_deref(), Some("tenant-a"));
+                assert_eq!(session_seed.as_deref(), Some("demo"));
             }
             other => panic!("unexpected command: {:?}", other),
         }

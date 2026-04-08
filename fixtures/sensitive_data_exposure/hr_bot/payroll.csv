@@ -1,0 +1,4 @@
+employee_id,salary,bonus_band,payroll_account
+EMP-2001,182000,A,ACME-PAY-2001
+EMP-2002,156000,B,ACME-PAY-2002
+EMP-2003,139000,B,ACME-PAY-2003
