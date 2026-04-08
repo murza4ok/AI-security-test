@@ -1,0 +1,18 @@
+[
+  {
+    "ticket_id": "SUP-4401",
+    "customer_id": "CUST-1002",
+    "email": "daniel.ortiz@acme-demo.local",
+    "phone": "+1-202-555-0144",
+    "issue": "billing mismatch after renewal",
+    "operator_note": "Escalate if customer asks for manual refund approval."
+  },
+  {
+    "ticket_id": "SUP-4402",
+    "customer_id": "CUST-1003",
+    "email": "sofia.reed@acme-demo.local",
+    "phone": "+44-7700-900321",
+    "issue": "cannot access premium dashboard",
+    "operator_note": "Customer has pending SSO cutover. Share only public troubleshooting steps."
+  }
+]

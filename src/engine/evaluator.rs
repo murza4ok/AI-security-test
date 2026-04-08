@@ -265,6 +265,8 @@ mod tests {
             harm_level,
             severity: None,
             notes: None,
+            generated: false,
+            seed_payload_id: None,
         }
     }
 

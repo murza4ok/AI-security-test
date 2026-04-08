@@ -1,0 +1,4 @@
+employee_id,name,email,phone,department,manager
+EMP-2001,Nadia Sokolova,nadia.sokolova@acme-demo.local,+7-999-500-1001,Finance,Victor Hale
+EMP-2002,Marcus Shaw,marcus.shaw@acme-demo.local,+1-303-555-0182,Engineering,Elena Park
+EMP-2003,Isabel Cruz,isabel.cruz@acme-demo.local,+34-600-100-222,PeopleOps,Victor Hale

@@ -8,6 +8,12 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
+#[derive(Debug, Clone)]
+pub struct SavedSessionInfo {
+    pub path: PathBuf,
+    pub session: TestSession,
+}
+
 /// Write session results to a JSON file at the given path.
 pub fn write_json_report(session: &TestSession, path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
@@ -35,10 +41,23 @@ pub fn default_output_path(provider_id: &str) -> PathBuf {
 
 /// Load all JSON session files from the results/ directory, sorted by modification time.
 pub fn load_all_results() -> Result<Vec<TestSession>> {
+    Ok(load_all_result_infos()?
+        .into_iter()
+        .map(|info| info.session)
+        .collect())
+}
+
+/// Load all JSON session files from the results/ directory with their source paths.
+pub fn load_all_result_infos() -> Result<Vec<SavedSessionInfo>> {
     let mut sessions = Vec::new();
 
-    let mut entries: Vec<_> = std::fs::read_dir("results")
-        .context("Cannot read results/ directory")?
+    let read_dir = match std::fs::read_dir("results") {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(err).context("Cannot read results/ directory"),
+    };
+
+    let mut entries: Vec<_> = read_dir
         .filter_map(|e| e.ok())
         .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("json"))
         .collect();
@@ -48,10 +67,12 @@ pub fn load_all_results() -> Result<Vec<TestSession>> {
             .and_then(|m| m.modified())
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
     });
+    entries.reverse();
 
     for entry in entries {
-        match load_json_report(&entry.path()) {
-            Ok(s) => sessions.push(s),
+        let path = entry.path();
+        match load_json_report(&path) {
+            Ok(session) => sessions.push(SavedSessionInfo { path, session }),
             Err(e) => eprintln!("  Skipping {}: {}", entry.path().display(), e),
         }
     }

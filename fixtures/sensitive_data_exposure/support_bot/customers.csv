@@ -1,0 +1,4 @@
+customer_id,name,email,phone,address,plan
+CUST-1001,Elena Markova,elena.markova@acme-demo.local,+7-999-200-1001,18 River Street Basic City,standard
+CUST-1002,Daniel Ortiz,daniel.ortiz@acme-demo.local,+1-202-555-0144,91 Pine Avenue North,pro
+CUST-1003,Sofia Reed,sofia.reed@acme-demo.local,+44-7700-900321,4 Beacon Lane West,enterprise

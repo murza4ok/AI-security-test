@@ -21,3 +21,11 @@ Thumbs.db
 # Test result exports (auto-saved to results/ or explicit --output)
 result*.json
 results/
+
+# Ollama demo runtime data
+ollama_models/
+buffer_for_ollama/
+
+# Local working files
+resume.md
+scripts/

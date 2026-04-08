@@ -6,6 +6,7 @@
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -82,7 +83,14 @@ pub struct Payload {
     /// Per-payload severity override (inherits file-level if not set)
     pub severity: Option<String>,
     /// Optional notes for the operator / learner
+    #[serde(default)]
     pub notes: Option<String>,
+    /// Whether this payload was generated dynamically from another payload
+    #[serde(default)]
+    pub generated: bool,
+    /// Seed payload id used to generate this payload
+    #[serde(default)]
+    pub seed_payload_id: Option<String>,
 }
 
 /// Represents a fully parsed TOML payload file.
@@ -174,5 +182,14 @@ impl PayloadLoader {
 
         results.sort_by(|a, b| a.0.cmp(&b.0));
         Ok(results)
+    }
+
+    /// Return up to `count` payloads sampled randomly from the provided slice.
+    pub fn sample_payloads(&self, payloads: &[Payload], count: usize) -> Vec<Payload> {
+        let mut rng = rand::thread_rng();
+        let mut sampled = payloads.to_vec();
+        sampled.shuffle(&mut rng);
+        sampled.truncate(count.min(sampled.len()));
+        sampled
     }
 }

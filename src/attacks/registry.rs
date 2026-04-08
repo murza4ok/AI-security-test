@@ -11,12 +11,12 @@ use super::{
     jailbreaking::JailbreakingAttack,
     many_shot::ManyShotAttack,
     prompt_injection::PromptInjectionAttack,
+    sensitive_data_exposure::SensitiveDataExposureAttack,
     token_attacks::TokenAttacksAttack,
 };
 use std::sync::Arc;
 
-/// Returns all registered attack categories, in the order they appear in menus.
-pub fn all_attacks() -> Vec<Arc<dyn Attack>> {
+pub fn all_standard_attacks() -> Vec<Arc<dyn Attack>> {
     vec![
         Arc::new(PromptInjectionAttack),
         Arc::new(JailbreakingAttack),
@@ -26,6 +26,13 @@ pub fn all_attacks() -> Vec<Arc<dyn Attack>> {
         Arc::new(ManyShotAttack),
         Arc::new(ContextManipulationAttack),
     ]
+}
+
+/// Returns all registered attack categories, in the order they appear in menus.
+pub fn all_attacks() -> Vec<Arc<dyn Attack>> {
+    let mut attacks = all_standard_attacks();
+    attacks.push(Arc::new(SensitiveDataExposureAttack));
+    attacks
 }
 
 /// Look up a single attack by its ID string.

@@ -6,6 +6,7 @@
 
 use crate::attacks::{Attack, AttackConfig, AttackResult};
 use crate::engine::session::{AttackRun, ProviderMetadata, SessionConfig, TestSession};
+use crate::generator;
 use crate::payloads::loader::PayloadLoader;
 use crate::providers::traits::LLMProvider;
 use anyhow::Result;
@@ -39,6 +40,20 @@ impl AttackRunner {
         // Optionally limit how many payloads to run (useful for quick tests)
         if let Some(max) = config.max_payloads {
             payloads.truncate(max);
+        }
+
+        if let (Some(generation), Some(generator_provider)) =
+            (&config.generation, &config.generator_provider)
+        {
+            let seeds = loader.sample_payloads(&payloads, generation.variants_per_attack);
+            let mut generated_payloads = generator::generate_payloads(
+                generator_provider.as_ref(),
+                attack,
+                &seeds,
+                generation,
+            )
+            .await?;
+            payloads.append(&mut generated_payloads);
         }
 
         let total = payloads.len();
@@ -84,6 +99,7 @@ impl AttackRunner {
             review_only_count,
             scoreable_payloads: 0,
             bypass_rate_pct: 0.0,
+            generated_payloads: 0,
             duration_ms: run_start.elapsed().as_millis() as u64,
             results,
         })

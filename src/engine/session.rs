@@ -10,6 +10,31 @@ use uuid::Uuid;
 
 pub const REPORT_SCHEMA_VERSION: u32 = 2;
 
+/// Scenario-level metadata for synthetic sensitive-data exposure runs.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ScenarioMetadata {
+    #[serde(default)]
+    pub scenario_id: Option<String>,
+    #[serde(default)]
+    pub scenario_name: Option<String>,
+    #[serde(default)]
+    pub scenario_type: Option<String>,
+    #[serde(default)]
+    pub sensitive_assets_count: usize,
+    #[serde(default)]
+    pub canary_count: usize,
+    #[serde(default)]
+    pub leaked_canaries: Vec<String>,
+    #[serde(default)]
+    pub leaked_pii_fields: Vec<String>,
+    #[serde(default)]
+    pub leaked_secret_types: Vec<String>,
+    #[serde(default)]
+    pub leaked_documents: Vec<String>,
+    #[serde(default)]
+    pub exposure_score: u32,
+}
+
 /// Summary statistics for a single attack category run.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AttackRun {
@@ -31,6 +56,9 @@ pub struct AttackRun {
     /// Cached bypass rate for diff/benchmark consumers.
     #[serde(default)]
     pub bypass_rate_pct: f32,
+    /// Number of payloads generated dynamically from curated seeds.
+    #[serde(default)]
+    pub generated_payloads: usize,
     pub duration_ms: u64,
     pub results: Vec<AttackResult>,
 }
@@ -38,6 +66,7 @@ pub struct AttackRun {
 impl AttackRun {
     /// Recompute derived metrics from the current counters.
     pub fn refresh_metrics(&mut self) {
+        self.generated_payloads = self.results.iter().filter(|result| result.generated).count();
         self.scoreable_payloads = self
             .payloads_tested
             .saturating_sub(self.informational_count + self.review_only_count);
@@ -53,6 +82,7 @@ impl AttackRun {
         self.bypass_rate_pct
     }
 
+    #[allow(dead_code)]
     pub fn scoreable_payloads(&self) -> usize {
         self.scoreable_payloads
     }
@@ -73,6 +103,8 @@ pub struct SessionSummary {
     pub total_scoreable_payloads: usize,
     #[serde(default)]
     pub bypass_rate_pct: f32,
+    #[serde(default)]
+    pub total_generated_payloads: usize,
 }
 
 impl SessionSummary {
@@ -87,6 +119,7 @@ impl SessionSummary {
         };
     }
 
+    #[allow(dead_code)]
     pub fn scoreable_payloads(&self) -> usize {
         self.total_scoreable_payloads
     }
@@ -104,6 +137,14 @@ pub struct SessionConfig {
     pub retry_base_delay_ms: u64,
     #[serde(default)]
     pub retry_max_delay_ms: u64,
+    #[serde(default)]
+    pub generated_variants_per_attack: usize,
+    #[serde(default)]
+    pub generator_provider: Option<String>,
+    #[serde(default)]
+    pub generation_time_budget_secs: u64,
+    #[serde(default)]
+    pub generation_strategy: Option<String>,
 }
 
 /// Provider metadata captured for reproducible reports.
@@ -141,6 +182,8 @@ pub struct TestSession {
     pub config: SessionConfig,
     #[serde(default)]
     pub benchmark: BenchmarkMetadata,
+    #[serde(default)]
+    pub scenario: ScenarioMetadata,
     pub attacks_run: Vec<AttackRun>,
     pub summary: SessionSummary,
 }
@@ -156,6 +199,7 @@ impl TestSession {
             provider,
             config,
             benchmark: BenchmarkMetadata::default(),
+            scenario: ScenarioMetadata::default(),
             attacks_run: Vec::new(),
             summary: SessionSummary::default(),
         };
@@ -173,6 +217,7 @@ impl TestSession {
         self.summary.total_inconclusive += run.inconclusive_count;
         self.summary.total_informational += run.informational_count;
         self.summary.total_review_only += run.review_only_count;
+        self.summary.total_generated_payloads += run.generated_payloads;
         self.attacks_run.push(run);
         self.refresh_metrics();
     }
@@ -189,6 +234,11 @@ impl TestSession {
         for run in &mut self.attacks_run {
             run.refresh_metrics();
         }
+        self.summary.total_generated_payloads = self
+            .attacks_run
+            .iter()
+            .map(|run| run.generated_payloads)
+            .sum();
         self.summary.refresh_metrics();
         self.benchmark.attack_ids = self
             .attacks_run
@@ -204,6 +254,25 @@ impl TestSession {
             self.benchmark.attack_count,
             self.summary.total_scoreable_payloads
         );
+        let mut leaked_canaries = std::collections::BTreeSet::new();
+        let mut leaked_pii_fields = std::collections::BTreeSet::new();
+        let mut leaked_secret_types = std::collections::BTreeSet::new();
+        let mut leaked_documents = std::collections::BTreeSet::new();
+        let mut exposure_score = 0_u32;
+        for run in &self.attacks_run {
+            for result in &run.results {
+                leaked_canaries.extend(result.matched_canaries.iter().cloned());
+                leaked_pii_fields.extend(result.matched_sensitive_fields.iter().cloned());
+                leaked_secret_types.extend(result.matched_secret_patterns.iter().cloned());
+                leaked_documents.extend(result.matched_documents.iter().cloned());
+                exposure_score = exposure_score.saturating_add(result.exposure_score);
+            }
+        }
+        self.scenario.leaked_canaries = leaked_canaries.into_iter().collect();
+        self.scenario.leaked_pii_fields = leaked_pii_fields.into_iter().collect();
+        self.scenario.leaked_secret_types = leaked_secret_types.into_iter().collect();
+        self.scenario.leaked_documents = leaked_documents.into_iter().collect();
+        self.scenario.exposure_score = exposure_score;
     }
 }
 
@@ -231,6 +300,7 @@ mod tests {
             review_only_count: 2,
             scoreable_payloads: 0,
             bypass_rate_pct: 0.0,
+            generated_payloads: 0,
             duration_ms: 5,
             results: Vec::new(),
         };
@@ -252,6 +322,7 @@ mod tests {
             total_review_only: 1,
             total_scoreable_payloads: 0,
             bypass_rate_pct: 0.0,
+            total_generated_payloads: 0,
         };
 
         summary.refresh_metrics();
@@ -270,10 +341,21 @@ mod tests {
             latency_ms: 10,
             tokens_used: Some(15),
             model_used: Some("model".to_string()),
+            generated: true,
+            seed_payload_id: Some("seed".to_string()),
+            matched_canaries: vec!["canary".to_string()],
+            matched_sensitive_fields: vec!["email".to_string()],
+            matched_documents: vec!["doc".to_string()],
+            matched_secret_patterns: vec!["api_key".to_string()],
+            matched_system_prompt_fragments: vec!["fragment".to_string()],
+            exposure_score: 20,
         };
 
         assert_eq!(result.harm_level, HarmLevel::L2);
         assert_eq!(result.model_used.as_deref(), Some("model"));
+        assert!(result.generated);
+        assert_eq!(result.seed_payload_id.as_deref(), Some("seed"));
+        assert_eq!(result.exposure_score, 20);
     }
 
     #[test]
@@ -299,6 +381,7 @@ mod tests {
             review_only_count: 1,
             scoreable_payloads: 0,
             bypass_rate_pct: 0.0,
+            generated_payloads: 0,
             duration_ms: 1,
             results: Vec::new(),
         });

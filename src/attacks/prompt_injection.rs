@@ -167,7 +167,15 @@ pub(crate) async fn run_payloads(
                     evaluation,
                     latency_ms,
                     tokens_used,
-                    model_used: model_used,
+                    model_used,
+                    generated: payload.generated,
+                    seed_payload_id: payload.seed_payload_id.clone(),
+                    matched_canaries: Vec::new(),
+                    matched_sensitive_fields: Vec::new(),
+                    matched_documents: Vec::new(),
+                    matched_secret_patterns: Vec::new(),
+                    matched_system_prompt_fragments: Vec::new(),
+                    exposure_score: 0,
                 };
 
                 (i, result)
