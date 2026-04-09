@@ -1,15 +1,13 @@
 //! Terminal result reporter.
 
-#![allow(dead_code)]
-
-use crate::engine::session::{AttackRun, TestSession};
+use crate::engine::session::TestSession;
 use crate::reporting::json_report::SavedSessionInfo;
 use comfy_table::{Attribute, Cell, Color, Table};
 use owo_colors::OwoColorize;
 
 pub fn print_session_summary(session: &TestSession) {
     println!();
-    println!("{}", "╔══ ATTACK SUMMARY ════════════════════════════════".cyan());
+    println!("{}", "== ATTACK SUMMARY ==".cyan().bold());
     println!(
         "  Session: {}",
         session.started_at.format("%Y-%m-%d %H:%M:%S UTC")
@@ -50,7 +48,7 @@ pub fn print_session_summary(session: &TestSession) {
     ]);
 
     for run in &session.attacks_run {
-        let bypass_pct = run.bypass_rate_pct();
+        let bypass_pct = run.bypass_rate_pct;
         table.add_row(vec![
             Cell::new(&run.attack_name),
             Cell::new(format!("{}/{}", run.refused_count, run.payloads_tested)).fg(Color::Green),
@@ -92,7 +90,7 @@ pub fn print_saved_sessions_overview(sessions: &[SavedSessionInfo]) {
     }
 
     println!();
-    println!("{}", "╔══ SAVED SESSIONS ════════════════════════════════".cyan());
+    println!("{}", "== SAVED SESSIONS ==".cyan().bold());
     println!();
 
     let mut table = Table::new();
@@ -140,7 +138,7 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
     }
 
     println!();
-    println!("{}", "╔══ SESSION COMPARISON ════════════════════════════".cyan());
+    println!("{}", "== SESSION COMPARISON ==".cyan().bold());
     println!();
 
     for (index, session) in sessions.iter().enumerate() {
@@ -209,27 +207,9 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
     println!();
 }
 
-pub fn print_attack_details(run: &AttackRun) {
-    println!();
-    println!("{}", format!("-- {} Details --", run.attack_name).bold().cyan());
-    println!();
-
-    for result in &run.results {
-        println!(
-            "  [{}] {} - {}ms",
-            result.evaluation.label(),
-            result.payload_name.bold(),
-            result.latency_ms
-        );
-        let preview = crate::cli::display::truncate(&result.response_received, 120);
-        println!("     Response: {}", preview.dimmed());
-        println!();
-    }
-}
-
 pub fn print_session_review(session: &TestSession) {
     println!();
-    println!("{}", "╔══ REVIEW MODE ═══════════════════════════════════".bright_blue());
+    println!("{}", "== REVIEW MODE ==".bright_blue().bold());
     println!(
         "  Session: {}   Provider: {}",
         session.started_at.format("%Y-%m-%d %H:%M UTC"),
@@ -242,7 +222,7 @@ pub fn print_session_review(session: &TestSession) {
             session.scenario.exposure_score
         );
     }
-    println!("{}", "╚══════════════════════════════════════════════════".bright_blue());
+    println!("  {}", "-".repeat(64).bright_blue());
 
     for run in &session.attacks_run {
         println!();
@@ -271,38 +251,55 @@ pub fn print_session_review(session: &TestSession) {
             if result.generated {
                 println!(
                     "       -> generated from seed {}",
-                    result.seed_payload_id.as_deref().unwrap_or("<unknown>").dimmed()
+                    result.seed_payload_id
+                        .as_deref()
+                        .unwrap_or("<unknown>")
+                        .dimmed()
                 );
             }
-            if !result.matched_canaries.is_empty() {
-                println!("       -> matched canaries: {}", result.matched_canaries.join(", ").red());
+            if !result.evidence.canaries.is_empty() {
+                println!(
+                    "       -> matched canaries: {}",
+                    result.evidence.canaries.join(", ").red()
+                );
             }
-            if !result.matched_sensitive_fields.is_empty() {
+            if !result.evidence.sensitive_fields.is_empty() {
                 println!(
                     "       -> matched sensitive fields: {}",
-                    result.matched_sensitive_fields.join(", ").yellow()
+                    result.evidence.sensitive_fields.join(", ").yellow()
                 );
             }
-            if !result.matched_secret_patterns.is_empty() {
+            if !result.evidence.secret_patterns.is_empty() {
                 println!(
                     "       -> matched secret patterns: {}",
-                    result.matched_secret_patterns.join(", ").red()
+                    result.evidence.secret_patterns.join(", ").red()
                 );
             }
-            if !result.matched_documents.is_empty() {
+            if !result.evidence.documents.is_empty() {
                 println!(
                     "       -> matched documents: {}",
-                    result.matched_documents.join(" | ").yellow()
+                    result.evidence.documents.join(" | ").yellow()
                 );
             }
-            if !result.matched_system_prompt_fragments.is_empty() {
+            if !result.evidence.system_prompt_fragments.is_empty() {
                 println!(
                     "       -> matched system prompt fragments: {}",
-                    result.matched_system_prompt_fragments.join(" | ").yellow()
+                    result.evidence.system_prompt_fragments.join(" | ").yellow()
                 );
             }
-            if result.exposure_score > 0 {
-                println!("       -> exposure score: {}", result.exposure_score.to_string().red());
+            if result.damage.score > 0 {
+                println!("       -> damage score: {}", result.damage.score.to_string().red());
+                println!(
+                    "       -> damage level: {} ({})",
+                    format!("{:?}", result.damage.level).red(),
+                    result.damage.level.criticality().dimmed()
+                );
+            }
+            if result.damage.score == 0 && !result.evidence.is_empty() {
+                println!(
+                    "       -> evidence captured without score escalation: {}",
+                    result.damage.summary.dimmed()
+                );
             }
 
             match &result.evaluation {

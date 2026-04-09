@@ -1,27 +1,24 @@
 //! CLI argument definitions using clap.
 //!
-//! Two modes:
-//! - No subcommand → interactive menu
-//! - Subcommand present → direct command execution (scriptable)
+//! Комментарии и справка для пользователя держатся на русском языке.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-/// ai-sec — Educational LLM Security Testing Tool
 #[derive(Parser, Debug)]
 #[command(
     name = "ai-sec",
-    about = "Educational CLI for testing LLM security vulnerabilities",
-    long_about = "ai-sec helps security researchers understand and test LLM attack surfaces.\n\
-                  For educational and authorized testing purposes only.",
+    about = "CLI-инструмент для тестирования безопасности LLM и LLM-приложений",
+    long_about = "ai-sec помогает исследовать уязвимости LLM, проводить сценарные red-team прогоны, запускать генеративные атаки и сравнивать результаты между моделями и провайдерами.\nИнструмент предназначен только для учебного и авторизованного тестирования.",
+    after_help = "Быстрые примеры:\n  ai-sec list\n  ai-sec run --attack jailbreaking --provider deepseek\n  ai-sec run --attack prompt_injection --provider deepseek --generated 3\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot\n  ai-sec sessions\n\nДополнительно:\n  ai-sec help run",
     version
 )]
 pub struct Cli {
-    /// Override the provider to use (openai, anthropic, ollama)
+    /// Выбрать конкретный провайдер: openai, anthropic, ollama, deepseek, yandexgpt
     #[arg(short, long, global = true, env = "AISEC_PROVIDER")]
     pub provider: Option<String>,
 
-    /// Increase output verbosity (use -v or -vv)
+    /// Увеличить подробность вывода (-v или -vv)
     #[arg(short, long, action = clap::ArgAction::Count, global = true)]
     pub verbose: u8,
 
@@ -29,84 +26,84 @@ pub struct Cli {
     pub command: Option<Commands>,
 }
 
-/// Available subcommands for non-interactive (scripted) use
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Run one or more attack categories against the configured provider
+    /// Запустить одну или несколько категорий атак
+    #[command(
+        after_help = "Примеры:\n  ai-sec run --attack prompt_injection --provider deepseek\n  ai-sec run --attack prompt_injection --provider deepseek --generated 3\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot --limit 5\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario internal_rag_bot --retrieval-mode subset"
+    )]
     Run {
-        /// Attack category IDs to run (e.g., jailbreaking, prompt_injection)
-        /// Use `ai-sec list` to see all available IDs.
+        /// ID категории атаки: jailbreaking, prompt_injection, sensitive_data_exposure
         #[arg(short, long, required = true)]
         attack: Vec<String>,
 
-        /// Override model name for this run
+        /// Override имени модели для этого запуска
         #[arg(short, long)]
         model: Option<String>,
 
-        /// Save results to a JSON file
+        /// Сохранить JSON-отчёт в указанный файл
         #[arg(short, long)]
         output: Option<PathBuf>,
 
-        /// Limit number of payloads per attack category (useful for quick tests)
+        /// Ограничить число payload-ов на категорию атаки
         #[arg(short, long)]
         limit: Option<usize>,
 
-        /// Generate up to N additional payload variants per attack using DeepSeek
+        /// Сгенерировать до N дополнительных payload-вариантов через DeepSeek
         #[arg(long)]
         generated: Option<usize>,
 
-        /// Application scenario for scenario-driven attacks such as sensitive_data_exposure
+        /// Сценарий приложения для scenario-driven атак, например support_bot
         #[arg(long)]
         app_scenario: Option<String>,
 
-        /// Override the default synthetic fixture root
+        /// Путь к корню synthetic fixtures
         #[arg(long)]
         fixture_root: Option<PathBuf>,
 
-        /// Retrieval mode for scenario-driven attacks: full or subset
+        /// Режим retrieval для scenario-driven атак: full или subset
         #[arg(long)]
         retrieval_mode: Option<String>,
 
-        /// Override the scenario manifest path
+        /// Явный путь к scenario manifest
         #[arg(long)]
         scenario_config: Option<PathBuf>,
 
-        /// Optional tenant identifier for synthetic multi-tenant scenarios
+        /// Tenant ID для synthetic multi-tenant сценариев
         #[arg(long)]
         tenant: Option<String>,
 
-        /// Optional deterministic seed for scenario assembly
+        /// Детерминированный seed для сборки сценария
         #[arg(long)]
         session_seed: Option<String>,
     },
 
-    /// List all available attack categories and their payload counts
+    /// Показать доступные категории атак и число payload-ов
     List,
 
-    /// Show educational explanation of an attack category
+    /// Показать обучающее описание категории атаки
     Explain {
-        /// Attack category ID (e.g., jailbreaking, token_attacks)
+        /// ID категории атаки
         attack: String,
     },
 
-    /// Verify connectivity and credentials for all configured providers
+    /// Проверить доступность и конфигурацию провайдеров
     Check,
 
-    /// Display a saved JSON report in human-readable format for manual review
+    /// Открыть сохранённый JSON-отчёт в review-режиме
     Review {
-        /// Path to the JSON report file (e.g. results/2026-04-02_14-30.json)
-        file: std::path::PathBuf,
+        /// Путь к JSON-отчёту, например results/2026-04-02_14-30.json
+        file: PathBuf,
     },
 
-    /// Compare results from multiple sessions side by side (one per provider)
+    /// Сравнить несколько сессий между собой
     Compare {
-        /// JSON report files to compare (e.g. results/..._deepseek.json results/..._yandexgpt.json)
-        /// If omitted, auto-loads all files from the results/ directory
+        /// JSON-отчёты для сравнения; если не указаны, будут загружены все файлы из results/
         #[arg(value_name = "FILE")]
-        files: Vec<std::path::PathBuf>,
+        files: Vec<PathBuf>,
     },
 
-    /// Show an overview of saved sessions in results/
+    /// Показать обзор сохранённых сессий в results/
     Sessions,
 }
 

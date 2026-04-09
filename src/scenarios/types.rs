@@ -98,8 +98,6 @@ pub struct ScenarioRunConfig {
 #[derive(Debug, Clone)]
 pub struct ScenarioEnvelope {
     pub system_prompt: String,
-    #[allow(dead_code)]
-    pub hidden_context: String,
     pub retrieved_documents: Vec<ScenarioAsset>,
     pub user_prompt: String,
 }
