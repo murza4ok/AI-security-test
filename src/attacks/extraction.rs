@@ -1,23 +1,25 @@
 //! System Prompt Extraction attack category.
 
-use super::{Attack, AttackConfig, AttackResult, ResourceLink};
+use super::{Attack, AttackConfig, AttackResult, ResourceLink, classic::run_classic_payloads};
 use crate::payloads::loader::{Payload, PayloadLoader};
 use crate::providers::traits::LLMProvider;
 use anyhow::Result;
 use async_trait::async_trait;
 
-use super::prompt_injection::run_payloads;
-
 pub struct ExtractionAttack;
 
 #[async_trait]
 impl Attack for ExtractionAttack {
-    fn id(&self) -> &str { "extraction" }
-    fn name(&self) -> &str { "System Prompt Extraction" }
+    fn id(&self) -> &str {
+        "extraction"
+    }
+
+    fn name(&self) -> &str {
+        "System Prompt Extraction"
+    }
 
     fn description(&self) -> &str {
-        "Attempts to recover the hidden system prompt that operators use to configure \
-         model behaviour. Critical for understanding deployed LLM attack surfaces."
+        "Attempts to recover the hidden system prompt that operators use to configure model behaviour. Critical for understanding deployed LLM attack surfaces."
     }
 
     fn educational_explainer(&self) -> &str {
@@ -61,7 +63,10 @@ MITIGATIONS:
             ResourceLink {
                 title: "OWASP LLM07: Insecure Plugin Design".to_string(),
                 source: "OWASP Top 10 for LLM Applications".to_string(),
-                url: Some("https://owasp.org/www-project-top-10-for-large-language-model-applications/".to_string()),
+                url: Some(
+                    "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
+                        .to_string(),
+                ),
             },
         ]
     }
@@ -77,6 +82,6 @@ MITIGATIONS:
         config: &AttackConfig,
         on_result: &(dyn for<'r> Fn(&'r AttackResult) + Send + Sync),
     ) -> Result<Vec<AttackResult>> {
-        run_payloads(provider, payloads, config, on_result).await
+        run_classic_payloads(provider, payloads, config, on_result).await
     }
 }

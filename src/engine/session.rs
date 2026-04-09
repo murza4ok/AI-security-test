@@ -77,15 +77,6 @@ impl AttackRun {
         };
     }
 
-    #[allow(dead_code)]
-    pub fn bypass_rate_pct(&self) -> f32 {
-        self.bypass_rate_pct
-    }
-
-    #[allow(dead_code)]
-    pub fn scoreable_payloads(&self) -> usize {
-        self.scoreable_payloads
-    }
 }
 
 /// Top-level aggregate statistics across all attack runs in a session.
@@ -119,10 +110,6 @@ impl SessionSummary {
         };
     }
 
-    #[allow(dead_code)]
-    pub fn scoreable_payloads(&self) -> usize {
-        self.total_scoreable_payloads
-    }
 }
 
 /// Snapshot of the runtime settings used for a session.
@@ -261,11 +248,11 @@ impl TestSession {
         let mut exposure_score = 0_u32;
         for run in &self.attacks_run {
             for result in &run.results {
-                leaked_canaries.extend(result.matched_canaries.iter().cloned());
-                leaked_pii_fields.extend(result.matched_sensitive_fields.iter().cloned());
-                leaked_secret_types.extend(result.matched_secret_patterns.iter().cloned());
-                leaked_documents.extend(result.matched_documents.iter().cloned());
-                exposure_score = exposure_score.saturating_add(result.exposure_score);
+                leaked_canaries.extend(result.evidence.canaries.iter().cloned());
+                leaked_pii_fields.extend(result.evidence.sensitive_fields.iter().cloned());
+                leaked_secret_types.extend(result.evidence.secret_patterns.iter().cloned());
+                leaked_documents.extend(result.evidence.documents.iter().cloned());
+                exposure_score = exposure_score.saturating_add(result.damage.score);
             }
         }
         self.scenario.leaked_canaries = leaked_canaries.into_iter().collect();
@@ -283,9 +270,8 @@ fn default_report_schema_version() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::damage::{AttackEvidence, DamageAssessment, DamageLevel};
     use crate::engine::evaluator::EvaluationResult;
-    use crate::payloads::loader::HarmLevel;
-
     #[test]
     fn bypass_rate_excludes_l0_and_l1_from_denominator() {
         let mut run = AttackRun {
@@ -306,8 +292,8 @@ mod tests {
         };
 
         run.refresh_metrics();
-        assert_eq!(run.scoreable_payloads(), 6);
-        assert!((run.bypass_rate_pct() - 33.333336).abs() < 0.01);
+        assert_eq!(run.scoreable_payloads, 6);
+        assert!((run.bypass_rate_pct - 33.333336).abs() < 0.01);
     }
 
     #[test]
@@ -326,7 +312,7 @@ mod tests {
         };
 
         summary.refresh_metrics();
-        assert_eq!(summary.scoreable_payloads(), 9);
+        assert_eq!(summary.total_scoreable_payloads, 9);
     }
 
     #[test]
@@ -336,26 +322,30 @@ mod tests {
             payload_name: "name".to_string(),
             prompt_sent: "prompt".to_string(),
             response_received: "response".to_string(),
-            harm_level: HarmLevel::L2,
             evaluation: EvaluationResult::Inconclusive,
             latency_ms: 10,
             tokens_used: Some(15),
             model_used: Some("model".to_string()),
             generated: true,
             seed_payload_id: Some("seed".to_string()),
-            matched_canaries: vec!["canary".to_string()],
-            matched_sensitive_fields: vec!["email".to_string()],
-            matched_documents: vec!["doc".to_string()],
-            matched_secret_patterns: vec!["api_key".to_string()],
-            matched_system_prompt_fragments: vec!["fragment".to_string()],
-            exposure_score: 20,
+            evidence: AttackEvidence {
+                canaries: vec!["canary".to_string()],
+                sensitive_fields: vec!["email".to_string()],
+                documents: vec!["doc".to_string()],
+                secret_patterns: vec!["api_key".to_string()],
+                system_prompt_fragments: vec!["fragment".to_string()],
+            },
+            damage: DamageAssessment {
+                level: DamageLevel::H3,
+                score: 20,
+                summary: "Высокая критичность".to_string(),
+            },
         };
 
-        assert_eq!(result.harm_level, HarmLevel::L2);
         assert_eq!(result.model_used.as_deref(), Some("model"));
         assert!(result.generated);
         assert_eq!(result.seed_payload_id.as_deref(), Some("seed"));
-        assert_eq!(result.exposure_score, 20);
+        assert_eq!(result.damage.score, 20);
     }
 
     #[test]

@@ -16,7 +16,7 @@ use super::{
 };
 use std::sync::Arc;
 
-pub fn all_standard_attacks() -> Vec<Arc<dyn Attack>> {
+pub fn classic_attacks() -> Vec<Arc<dyn Attack>> {
     vec![
         Arc::new(PromptInjectionAttack),
         Arc::new(JailbreakingAttack),
@@ -30,7 +30,7 @@ pub fn all_standard_attacks() -> Vec<Arc<dyn Attack>> {
 
 /// Returns all registered attack categories, in the order they appear in menus.
 pub fn all_attacks() -> Vec<Arc<dyn Attack>> {
-    let mut attacks = all_standard_attacks();
+    let mut attacks = classic_attacks();
     attacks.push(Arc::new(SensitiveDataExposureAttack));
     attacks
 }

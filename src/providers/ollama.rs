@@ -83,6 +83,16 @@ struct OllamaChatResponse {
     message: OllamaMessage,
 }
 
+#[derive(Deserialize)]
+struct OllamaTagsResponse {
+    models: Vec<OllamaModelInfo>,
+}
+
+#[derive(Deserialize)]
+struct OllamaModelInfo {
+    name: String,
+}
+
 // ── LLMProvider implementation ───────────────────────────────────────────────
 
 #[async_trait]
@@ -179,13 +189,36 @@ impl LLMProvider for OllamaProvider {
     }
 
     async fn health_check(&self) -> Result<(), ProviderError> {
-        // Just check if the server is reachable by hitting the version endpoint
-        let url = format!("{}/api/version", self.base_url);
-        self.client
+        let url = format!("{}/api/tags", self.base_url);
+        let response = self
+            .client
             .get(&url)
             .send()
             .await
             .map_err(|_| ProviderError::NotConfigured)?;
-        Ok(())
+
+        if !response.status().is_success() {
+            return Err(ProviderError::ApiError {
+                status: response.status().as_u16(),
+                message: response.text().await.unwrap_or_default(),
+            });
+        }
+
+        let parsed: OllamaTagsResponse = response
+            .json()
+            .await
+            .map_err(|e| ProviderError::ParseError(e.to_string()))?;
+
+        if parsed.models.iter().any(|model| model.name == self.model) {
+            Ok(())
+        } else {
+            Err(ProviderError::ApiError {
+                status: 404,
+                message: format!(
+                    "configured model '{}' is not available in local Ollama registry",
+                    self.model
+                ),
+            })
+        }
     }
 }

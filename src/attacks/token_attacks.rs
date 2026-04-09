@@ -2,8 +2,7 @@
 //!
 //! Exploits the gap between how humans read text and how tokenizers process it.
 
-use super::{Attack, AttackConfig, AttackResult, ResourceLink};
-use crate::attacks::prompt_injection::run_payloads;
+use super::{Attack, AttackConfig, AttackResult, ResourceLink, classic::run_classic_payloads};
 use crate::payloads::loader::{Payload, PayloadLoader};
 use crate::providers::traits::LLMProvider;
 use anyhow::Result;
@@ -13,12 +12,16 @@ pub struct TokenAttacksAttack;
 
 #[async_trait]
 impl Attack for TokenAttacksAttack {
-    fn id(&self) -> &str { "token_attacks" }
-    fn name(&self) -> &str { "Token-Level Attacks" }
+    fn id(&self) -> &str {
+        "token_attacks"
+    }
+
+    fn name(&self) -> &str {
+        "Token-Level Attacks"
+    }
 
     fn description(&self) -> &str {
-        "Exploits the gap between how humans read text and how tokenizers process it. \
-         Uses Unicode homoglyphs, zero-width characters, and encoding tricks to bypass filters."
+        "Exploits the gap between how humans read text and how tokenizers process it. Uses Unicode homoglyphs, zero-width characters, and encoding tricks to bypass filters."
     }
 
     fn educational_explainer(&self) -> &str {
@@ -27,10 +30,10 @@ impl Attack for TokenAttacksAttack {
          subword pieces. This creates a gap: a string can look identical to a human but\n\
          tokenize differently, potentially bypassing keyword-based content filters.\n\n\
          TECHNIQUES:\n\
-         1. Homoglyphs: Replace ASCII 'e' with Cyrillic 'е' (U+0435) — identical visually\n\
+         1. Homoglyphs: Replace ASCII 'e' with Cyrillic 'е' (U+0435) - identical visually\n\
          2. Zero-width spaces (U+200B): Insert invisible chars inside words\n\
          3. Right-to-left override (U+202E): Reverses text rendering direction\n\
-         4. Leetspeak: p4ssw0rd, h4ck3r — numeric substitutions\n\
+         4. Leetspeak: p4ssw0rd, h4ck3r - numeric substitutions\n\
          5. Soft hyphen (U+00AD): Splits token boundaries invisibly\n\n\
          WHY IT MATTERS:\n\
          Content moderation systems operating on surface text can be bypassed while\n\
@@ -65,6 +68,6 @@ impl Attack for TokenAttacksAttack {
         config: &AttackConfig,
         on_result: &(dyn for<'r> Fn(&'r AttackResult) + Send + Sync),
     ) -> Result<Vec<AttackResult>> {
-        run_payloads(provider, payloads, config, on_result).await
+        run_classic_payloads(provider, payloads, config, on_result).await
     }
 }

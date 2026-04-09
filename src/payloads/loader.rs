@@ -3,8 +3,6 @@
 //! Reads TOML files from the `payloads/<category>/` directory and returns
 //! structured `Payload` objects. Each TOML file maps to one `PayloadFile`.
 
-#![allow(dead_code)]
-
 use anyhow::{Context, Result};
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
@@ -162,26 +160,6 @@ impl PayloadLoader {
             .collect();
 
         Ok(payloads)
-    }
-
-    /// Count how many payloads exist for each category.
-    /// Returns a sorted list of (category_name, count) pairs.
-    pub fn list_categories(&self) -> Result<Vec<(String, usize)>> {
-        let mut results = Vec::new();
-        let entries = std::fs::read_dir(&self.payloads_root)
-            .with_context(|| "Cannot read payloads root directory")?;
-
-        for entry in entries {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() {
-                let name = entry.file_name().to_string_lossy().to_string();
-                let count = self.load_category(&name).map(|p| p.len()).unwrap_or(0);
-                results.push((name, count));
-            }
-        }
-
-        results.sort_by(|a, b| a.0.cmp(&b.0));
-        Ok(results)
     }
 
     /// Return up to `count` payloads sampled randomly from the provided slice.

@@ -2,8 +2,7 @@
 //!
 //! Exploits how models handle conversation history and context window state.
 
-use super::{Attack, AttackConfig, AttackResult, ResourceLink};
-use crate::attacks::prompt_injection::run_payloads;
+use super::{Attack, AttackConfig, AttackResult, ResourceLink, classic::run_classic_payloads};
 use crate::payloads::loader::{Payload, PayloadLoader};
 use crate::providers::traits::LLMProvider;
 use anyhow::Result;
@@ -13,12 +12,16 @@ pub struct ContextManipulationAttack;
 
 #[async_trait]
 impl Attack for ContextManipulationAttack {
-    fn id(&self) -> &str { "context_manipulation" }
-    fn name(&self) -> &str { "Context Manipulation" }
+    fn id(&self) -> &str {
+        "context_manipulation"
+    }
+
+    fn name(&self) -> &str {
+        "Context Manipulation"
+    }
 
     fn description(&self) -> &str {
-        "Exploits how models handle conversation history: false permissions, \
-         poisoned facts, role confusion, and false memory claims."
+        "Exploits how models handle conversation history: false permissions, poisoned facts, role confusion, and false memory claims."
     }
 
     fn educational_explainer(&self) -> &str {
@@ -39,7 +42,8 @@ impl Attack for ContextManipulationAttack {
     fn resources(&self) -> Vec<ResourceLink> {
         vec![
             ResourceLink {
-                title: "Prompt Injection Attacks and Defenses in LLM-Integrated Applications".to_string(),
+                title: "Prompt Injection Attacks and Defenses in LLM-Integrated Applications"
+                    .to_string(),
                 source: "Liu et al., 2023".to_string(),
                 url: Some("https://arxiv.org/abs/2310.12815".to_string()),
             },
@@ -62,6 +66,6 @@ impl Attack for ContextManipulationAttack {
         config: &AttackConfig,
         on_result: &(dyn for<'r> Fn(&'r AttackResult) + Send + Sync),
     ) -> Result<Vec<AttackResult>> {
-        run_payloads(provider, payloads, config, on_result).await
+        run_classic_payloads(provider, payloads, config, on_result).await
     }
 }

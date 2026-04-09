@@ -2,8 +2,7 @@
 //!
 //! Exploits long-context models by conditioning them with many prior examples.
 
-use super::{Attack, AttackConfig, AttackResult, ResourceLink};
-use crate::attacks::prompt_injection::run_payloads;
+use super::{Attack, AttackConfig, AttackResult, ResourceLink, classic::run_classic_payloads};
 use crate::payloads::loader::{Payload, PayloadLoader};
 use crate::providers::traits::LLMProvider;
 use anyhow::Result;
@@ -13,12 +12,16 @@ pub struct ManyShotAttack;
 
 #[async_trait]
 impl Attack for ManyShotAttack {
-    fn id(&self) -> &str { "many_shot" }
-    fn name(&self) -> &str { "Many-Shot Jailbreaking" }
+    fn id(&self) -> &str {
+        "many_shot"
+    }
+
+    fn name(&self) -> &str {
+        "Many-Shot Jailbreaking"
+    }
 
     fn description(&self) -> &str {
-        "Exploits long-context models by conditioning them with many examples of \
-         compliant answers before the actual target question."
+        "Exploits long-context models by conditioning them with many examples of compliant answers before the actual target question."
     }
 
     fn educational_explainer(&self) -> &str {
@@ -34,19 +37,17 @@ impl Attack for ManyShotAttack {
          Safety training teaches refusal. But many-shot creates a local context where\n\
          compliance is the established pattern. The model's in-context learning\n\
          conflicts with its safety training.\n\n\
-         SEVERITY: High — especially for RAG systems, document processors, and\n\
+         SEVERITY: High - especially for RAG systems, document processors, and\n\
          any agentic system that reads external content.\n\n\
          Reference: https://www.anthropic.com/research/many-shot-jailbreaking"
     }
 
     fn resources(&self) -> Vec<ResourceLink> {
-        vec![
-            ResourceLink {
-                title: "Many-Shot Jailbreaking".to_string(),
-                source: "Anthropic, 2024".to_string(),
-                url: Some("https://www.anthropic.com/research/many-shot-jailbreaking".to_string()),
-            },
-        ]
+        vec![ResourceLink {
+            title: "Many-Shot Jailbreaking".to_string(),
+            source: "Anthropic, 2024".to_string(),
+            url: Some("https://www.anthropic.com/research/many-shot-jailbreaking".to_string()),
+        }]
     }
 
     fn load_payloads(&self, loader: &PayloadLoader) -> Result<Vec<Payload>> {
@@ -60,6 +61,6 @@ impl Attack for ManyShotAttack {
         config: &AttackConfig,
         on_result: &(dyn for<'r> Fn(&'r AttackResult) + Send + Sync),
     ) -> Result<Vec<AttackResult>> {
-        run_payloads(provider, payloads, config, on_result).await
+        run_classic_payloads(provider, payloads, config, on_result).await
     }
 }

@@ -3,6 +3,7 @@
 //! Defines the `Attack` trait that all attack categories implement,
 //! plus the registry that maps category IDs to concrete implementations.
 
+pub mod classic;
 pub mod context_manipulation;
 pub mod extraction;
 pub mod goal_hijacking;
@@ -14,7 +15,8 @@ pub mod sensitive_data_exposure;
 pub mod token_attacks;
 
 use crate::engine::evaluator::EvaluationResult;
-use crate::payloads::loader::{HarmLevel, Payload, PayloadLoader};
+use crate::engine::damage::{AttackEvidence, DamageAssessment};
+use crate::payloads::loader::{Payload, PayloadLoader};
 use crate::providers::traits::{LLMProvider, RequestConfig};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -42,9 +44,6 @@ pub struct AttackResult {
     pub prompt_sent: String,
     /// Raw text received from the model
     pub response_received: String,
-    /// Harm classification of the payload that produced this result
-    #[serde(default)]
-    pub harm_level: HarmLevel,
     /// How we evaluated this response
     pub evaluation: EvaluationResult,
     /// Wall-clock latency for this request
@@ -60,24 +59,12 @@ pub struct AttackResult {
     /// Seed payload id used to generate this payload, if applicable
     #[serde(default)]
     pub seed_payload_id: Option<String>,
-    /// Exact canary values leaked by the response, if any
+    /// Standardized evidence attached to the result.
     #[serde(default)]
-    pub matched_canaries: Vec<String>,
-    /// Sensitive field names whose values were leaked
+    pub evidence: AttackEvidence,
+    /// Standardized damage assessment for the result.
     #[serde(default)]
-    pub matched_sensitive_fields: Vec<String>,
-    /// Internal document identifiers or fragments leaked
-    #[serde(default)]
-    pub matched_documents: Vec<String>,
-    /// Secret types or secret-like patterns leaked
-    #[serde(default)]
-    pub matched_secret_patterns: Vec<String>,
-    /// System prompt fragments disclosed in the response
-    #[serde(default)]
-    pub matched_system_prompt_fragments: Vec<String>,
-    /// Exposure score assigned by a specialized evaluator
-    #[serde(default)]
-    pub exposure_score: u32,
+    pub damage: DamageAssessment,
 }
 
 /// Configuration for a single attack run.

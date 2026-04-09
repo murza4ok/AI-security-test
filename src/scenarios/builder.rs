@@ -31,7 +31,6 @@ pub fn build_envelope(
 
     ScenarioEnvelope {
         system_prompt,
-        hidden_context,
         retrieved_documents,
         user_prompt: payload.prompt.clone(),
     }

@@ -3,13 +3,11 @@
 //! Tests whether the model can be convinced to bypass its safety training
 //! through roleplay, framing, encoding, or persona manipulation.
 
-use super::{Attack, AttackConfig, AttackResult, ResourceLink};
-use crate::engine::evaluator::HeuristicEvaluator;
+use super::{Attack, AttackConfig, AttackResult, ResourceLink, classic::run_classic_payloads};
 use crate::payloads::loader::{Payload, PayloadLoader};
 use crate::providers::traits::LLMProvider;
 use anyhow::Result;
 use async_trait::async_trait;
-use std::time::Instant;
 
 pub struct JailbreakingAttack;
 
@@ -24,8 +22,7 @@ impl Attack for JailbreakingAttack {
     }
 
     fn description(&self) -> &str {
-        "Attempts to bypass safety training through roleplay, hypothetical framing, \
-         encoding tricks, and persona manipulation."
+        "Attempts to bypass safety training through roleplay, hypothetical framing, encoding tricks, and persona manipulation."
     }
 
     fn educational_explainer(&self) -> &str {
@@ -36,13 +33,13 @@ bypass safety training.
 
 Unlike prompt injection (which attacks the instruction layer), jailbreaking
 attacks the model's learned safety behaviour. The model isn't misled about
-WHO is giving it instructions — it's convinced to ignore its own values.
+WHO is giving it instructions - it's convinced to ignore its own values.
 
-HOW IT WORKS — COMMON TECHNIQUES:
+HOW IT WORKS - COMMON TECHNIQUES:
 
 1. DAN (Do Anything Now)
    Asks the model to roleplay as an "unrestricted alter ego". The framing
-   exploits the model's ability to adopt personas — safety training may not
+   exploits the model's ability to adopt personas - safety training may not
    fully generalise to roleplay contexts.
 
 2. Hypothetical / Academic Framing
@@ -109,60 +106,6 @@ MITIGATIONS:
         config: &AttackConfig,
         on_result: &(dyn for<'r> Fn(&'r AttackResult) + Send + Sync),
     ) -> Result<Vec<AttackResult>> {
-        let evaluator = HeuristicEvaluator::new();
-        let mut results = Vec::new();
-
-        for payload in payloads {
-            let start = Instant::now();
-            let response = provider
-                .complete(
-                    config.system_prompt.as_deref(),
-                    &payload.prompt,
-                    &config.request_config,
-                )
-                .await;
-
-            let (response_text, latency_ms, tokens_used, evaluation, model_used) = match response {
-                Ok(r) => {
-                    let lat = start.elapsed().as_millis() as u64;
-                    let tok = r
-                        .completion_tokens
-                        .map(|c| r.prompt_tokens.unwrap_or(0) + c);
-                    let eval = evaluator.evaluate(&r, payload);
-                    (r.text, lat, tok, eval, Some(r.model))
-                }
-                Err(e) => (
-                    format!("ERROR: {}", e),
-                    start.elapsed().as_millis() as u64,
-                    None,
-                    crate::engine::evaluator::EvaluationResult::Inconclusive,
-                    None,
-                ),
-            };
-
-                let result = AttackResult {
-                    payload_id: payload.id.clone(),
-                    payload_name: payload.name.clone(),
-                prompt_sent: payload.prompt.clone(),
-                response_received: response_text,
-                harm_level: payload.harm_level.clone(),
-                evaluation,
-                latency_ms,
-                tokens_used,
-                    model_used,
-                    generated: payload.generated,
-                    seed_payload_id: payload.seed_payload_id.clone(),
-                    matched_canaries: Vec::new(),
-                    matched_sensitive_fields: Vec::new(),
-                    matched_documents: Vec::new(),
-                    matched_secret_patterns: Vec::new(),
-                    matched_system_prompt_fragments: Vec::new(),
-                    exposure_score: 0,
-                };
-            on_result(&result);
-            results.push(result);
-        }
-
-        Ok(results)
+        run_classic_payloads(provider, payloads, config, on_result).await
     }
 }

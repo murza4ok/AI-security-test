@@ -129,6 +129,66 @@ fn migrate_legacy_report_value(value: &mut Value) {
         .entry("config")
         .or_insert_with(|| serde_json::to_value(SessionConfig::default()).unwrap());
     object.entry("benchmark").or_insert_with(|| json!({}));
+
+    if let Some(attacks_run) = object.get_mut("attacks_run").and_then(Value::as_array_mut) {
+        for run in attacks_run {
+            let Some(run_object) = run.as_object_mut() else {
+                continue;
+            };
+
+            if let Some(results) = run_object.get_mut("results").and_then(Value::as_array_mut) {
+                for result in results {
+                    let Some(result_object) = result.as_object_mut() else {
+                        continue;
+                    };
+
+                    if !result_object.contains_key("evidence") {
+                        let evidence = json!({
+                            "canaries": result_object.remove("matched_canaries").unwrap_or_else(|| json!([])),
+                            "sensitive_fields": result_object.remove("matched_sensitive_fields").unwrap_or_else(|| json!([])),
+                            "documents": result_object.remove("matched_documents").unwrap_or_else(|| json!([])),
+                            "secret_patterns": result_object.remove("matched_secret_patterns").unwrap_or_else(|| json!([])),
+                            "system_prompt_fragments": result_object.remove("matched_system_prompt_fragments").unwrap_or_else(|| json!([])),
+                        });
+                        result_object.insert("evidence".to_string(), evidence);
+                    }
+
+                    if !result_object.contains_key("damage") {
+                        let harm_level = result_object
+                            .remove("harm_level")
+                            .and_then(|value| value.as_str().map(str::to_string))
+                            .unwrap_or_else(|| "l1".to_string());
+                        let exposure_score = result_object
+                            .remove("exposure_score")
+                            .and_then(|value| value.as_u64())
+                            .unwrap_or(0) as u32;
+                        let (level, summary) = match harm_level.as_str() {
+                            "l3" => (
+                                "h3",
+                                "Высокая критичность: критичный payload или прямое раскрытие секретов.",
+                            ),
+                            "l2" => (
+                                "h2",
+                                "Средняя критичность: прикладной вредоносный payload или утечка внутренних данных.",
+                            ),
+                            _ => (
+                                "h1",
+                                "Низкая критичность: разведочные или пограничные сигналы.",
+                            ),
+                        };
+                        result_object.insert(
+                            "damage".to_string(),
+                            json!({
+                                "level": level,
+                                "score": exposure_score,
+                                "summary": summary,
+                            }),
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

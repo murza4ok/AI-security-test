@@ -1,118 +1,75 @@
 //! Terminal display helpers.
 //!
-//! Centralised colour palette and formatting utilities so that
-//! the rest of the codebase doesn't scatter colour codes everywhere.
-
-#![allow(dead_code)]
+//! Комментарии и обучающие подсказки держим на русском, чтобы интерфейс для
+//! исследования и демонстраций читался единообразно.
 
 use owo_colors::OwoColorize;
 
-// ── Colour-coded labels ───────────────────────────────────────────────────────
-
-/// Print a success / "safety held" line
 pub fn print_refused(msg: &str) {
-    println!("  {} {}", "✓ REFUSED".green().bold(), msg);
+    println!("  {} {}", "REFUSED".green().bold(), msg);
 }
 
-/// Print an ambiguous / partial result line
 pub fn print_partial(msg: &str) {
-    println!("  {} {}", "⚠ PARTIAL".yellow().bold(), msg);
+    println!("  {} {}", "PARTIAL".yellow().bold(), msg);
 }
 
-/// Print a bypass / attack succeeded line
 pub fn print_success(msg: &str) {
-    println!("  {} {}", "✗ BYPASS ".red().bold(), msg);
+    println!("  {} {}", "BYPASS".red().bold(), msg);
 }
 
-/// Print an error line
 pub fn print_error(msg: &str) {
-    println!("  {} {}", "  ERROR  ".bright_red().bold(), msg);
+    println!("  {} {}", "ERROR".bright_red().bold(), msg);
 }
 
-/// Print a neutral info line
-pub fn print_info(msg: &str) {
-    println!("  {} {}", "  INFO   ".bright_blue(), msg);
-}
-
-/// Print an informational result (L0 payload — model answered public knowledge correctly)
 pub fn print_informational(msg: &str) {
-    println!("  {} {}", "○ INFO   ".bright_black().bold(), msg);
+    println!("  {} {}", "INFO(L0)".bright_black().bold(), msg);
 }
 
-// ── Section headers ───────────────────────────────────────────────────────────
-
-/// Print a prominent banner (used at startup)
 pub fn print_banner() {
     println!();
-    println!("{}", "╔══════════════════════════════════════════════════════════╗".cyan());
-    println!("{}", "║      AI SECURITY TESTING TOOL  v0.1.0                   ║".cyan());
-    println!("{}", "║      Educational LLM Vulnerability Research              ║".cyan());
-    println!("{}", "╚══════════════════════════════════════════════════════════╝".cyan());
+    println!("{}", "==============================================".cyan());
+    println!("{}", "AI SECURITY TESTING TOOL".cyan().bold());
+    println!("{}", "Educational LLM Vulnerability Research".cyan());
+    println!("{}", "==============================================".cyan());
     println!();
 }
 
-/// Print the ethical use disclaimer. Shown once at every startup.
 pub fn print_disclaimer() {
-    println!("{}", "  ⚠  DISCLAIMER".yellow().bold());
-    println!("  This tool is for authorized security testing and education only.");
-    println!("  Do not use against any system without explicit permission.");
-    println!("  The authors assume no liability for misuse.");
+    println!("{}", "  Внимание".yellow().bold());
+    println!("  Инструмент предназначен только для авторизованного тестирования и обучения.");
+    println!("  Не используйте его против чужих систем без явного разрешения.");
     println!();
 }
 
-/// Print a named section header
 pub fn print_section(title: &str) {
     println!();
-    println!("  {}", format!("── {} ──────────────────────────────", title).bright_blue().bold());
+    println!("  {}", format!("-- {} --", title).bright_blue().bold());
 }
 
-/// Print a subsection header (lighter weight)
-pub fn print_subsection(title: &str) {
-    println!("    {}", title.bold());
-}
-
-/// Print a compact usage/help reference shown when running without subcommand.
 pub fn print_usage_hint() {
-    println!("  {}", "ИСПОЛЬЗОВАНИЕ".bold().bright_blue());
+    println!("  {}", "Краткая справка".bold().bright_blue());
     println!();
-    println!("  {}  {}",
-        "ai-sec run -a <категория>".cyan(),
-        "— запустить атаку (можно несколько: -a jailbreaking -a extraction)");
-    println!("  {}     {}",
-        "ai-sec list".cyan(),
-        "— список всех категорий атак с описаниями");
-    println!("  {}  {}",
-        "ai-sec explain <id>".cyan(),
-        "— объяснение техники атаки");
-    println!("  {}    {}",
-        "ai-sec check".cyan(),
-        "— проверка подключения к провайдеру");
+    println!("  {}  {}", "ai-sec run -a <category>".cyan(), "запустить одну или несколько атак");
+    println!("  {}     {}", "ai-sec list".cyan(), "показать доступные категории атак");
+    println!("  {}  {}", "ai-sec explain <id>".cyan(), "показать обучающее описание атаки");
+    println!("  {}    {}", "ai-sec check".cyan(), "проверить доступность провайдеров");
+    println!("  {} {}", "ai-sec sessions".cyan(), "показать обзор сохранённых сессий");
     println!();
-    println!("  {}  {}",
-        "-a jailbreaking".yellow(),
-        "prompt_injection  extraction  goal_hijacking");
-    println!("  {}  {}",
-        "               ".yellow(),
-        "token_attacks     many_shot   context_manipulation");
+    println!("  Категории:");
+    println!("    prompt_injection  jailbreaking  extraction  goal_hijacking");
+    println!("    token_attacks     many_shot     context_manipulation");
+    println!("    sensitive_data_exposure");
     println!();
-    println!("  {}",
-        "──────────────────────────────────────────────────────────".bright_black());
-    println!("  {} {}",
-        "Провайдер".bright_black(),
-        "задаётся через .env (DEEPSEEK_API_KEY, YANDEX_API_KEY, …)".bright_black());
+    println!("  Провайдер задаётся через `.env` или флаг `--provider`.");
     println!();
 }
 
-// ── Utility ───────────────────────────────────────────────────────────────────
-
-/// Truncate a string to `max` chars and append "…" if it was truncated.
-/// Used for previewing long LLM responses in the terminal.
 pub fn truncate(s: &str, max: usize) -> String {
     let s = s.trim();
     if s.chars().count() <= max {
         s.to_string()
     } else {
         let truncated: String = s.chars().take(max).collect();
-        format!("{}…", truncated)
+        format!("{truncated}...")
     }
 }

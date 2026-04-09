@@ -3,16 +3,11 @@
 //! Tests whether injected instructions in user input can override the
 //! model's original system prompt or task.
 
-use super::{Attack, AttackConfig, AttackResult, ResourceLink};
-use crate::engine::evaluator::{EvaluationResult, HeuristicEvaluator};
+use super::{Attack, AttackConfig, AttackResult, ResourceLink, classic::run_classic_payloads};
 use crate::payloads::loader::{Payload, PayloadLoader};
 use crate::providers::traits::LLMProvider;
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::StreamExt;
-use std::sync::Arc;
-use std::time::Instant;
-use tokio::sync::Semaphore;
 
 pub struct PromptInjectionAttack;
 
@@ -21,13 +16,13 @@ impl Attack for PromptInjectionAttack {
     fn id(&self) -> &str {
         "prompt_injection"
     }
+
     fn name(&self) -> &str {
         "Direct Prompt Injection"
     }
 
     fn description(&self) -> &str {
-        "Injects new instructions into user-controlled input to override the model's \
-         original system prompt. Analogous to SQL injection for LLMs."
+        "Injects new instructions into user-controlled input to override the model's original system prompt. Analogous to SQL injection for LLMs."
     }
 
     fn educational_explainer(&self) -> &str {
@@ -45,7 +40,7 @@ its original role and follow the injected instructions.
 TYPES:
 - Direct injection: injected text is directly visible to the model
 - Indirect injection: instructions arrive via external content the model
-  processes (documents, web pages, email) — see also: goal_hijacking
+  processes (documents, web pages, email) - see also: goal_hijacking
 
 DETECTION:
 Injections often contain telltale patterns:
@@ -95,101 +90,6 @@ MITIGATIONS:
         config: &AttackConfig,
         on_result: &(dyn for<'r> Fn(&'r AttackResult) + Send + Sync),
     ) -> Result<Vec<AttackResult>> {
-        run_payloads(provider, payloads, config, on_result).await
+        run_classic_payloads(provider, payloads, config, on_result).await
     }
-}
-
-/// Shared payload execution logic used by all attack categories.
-///
-/// Runs up to `config.concurrency` payloads concurrently using a semaphore.
-/// Results are returned in the original payload order; `on_result` is called
-/// as each response arrives (live output, potentially out of insertion order).
-pub(crate) async fn run_payloads(
-    provider: &dyn LLMProvider,
-    payloads: &[Payload],
-    config: &AttackConfig,
-    on_result: &(dyn for<'r> Fn(&'r AttackResult) + Send + Sync),
-) -> Result<Vec<AttackResult>> {
-    let evaluator = HeuristicEvaluator::new();
-
-    // Semaphore limits how many requests fly in parallel.
-    // Acquired before each HTTP call, released when the response arrives.
-    let semaphore = Arc::new(Semaphore::new(config.concurrency));
-
-    // Build a FuturesUnordered so results stream in as they complete.
-    // Each future returns (original_index, AttackResult) so we can restore order.
-    let mut futs: futures::stream::FuturesUnordered<_> = payloads
-        .iter()
-        .enumerate()
-        .map(|(i, payload)| {
-            let sem = Arc::clone(&semaphore);
-            let evaluator = evaluator.clone();
-            // Both provider and config are shared references — valid for the
-            // lifetime of run_payloads. No spawn needed, so no 'static required.
-            async move {
-                // Acquire a slot; released automatically when _permit is dropped
-                let _permit = sem.acquire().await.expect("semaphore closed");
-
-                let start = Instant::now();
-                let response = provider
-                    .complete(
-                        config.system_prompt.as_deref(),
-                        &payload.prompt,
-                        &config.request_config,
-                    )
-                    .await;
-
-                let (response_text, latency_ms, tokens_used, evaluation, model_used) =
-                    match response {
-                        Ok(r) => {
-                            let lat = start.elapsed().as_millis() as u64;
-                            let tok = r
-                                .completion_tokens
-                                .map(|c| r.prompt_tokens.unwrap_or(0) + c);
-                            let eval = evaluator.evaluate(&r, payload);
-                            (r.text, lat, tok, eval, Some(r.model))
-                        }
-                        Err(e) => (
-                            format!("ERROR: {}", e),
-                            start.elapsed().as_millis() as u64,
-                            None,
-                            EvaluationResult::Inconclusive,
-                            None,
-                        ),
-                    };
-
-                let result = AttackResult {
-                    payload_id: payload.id.clone(),
-                    payload_name: payload.name.clone(),
-                    prompt_sent: payload.prompt.clone(),
-                    response_received: response_text,
-                    harm_level: payload.harm_level.clone(),
-                    evaluation,
-                    latency_ms,
-                    tokens_used,
-                    model_used,
-                    generated: payload.generated,
-                    seed_payload_id: payload.seed_payload_id.clone(),
-                    matched_canaries: Vec::new(),
-                    matched_sensitive_fields: Vec::new(),
-                    matched_documents: Vec::new(),
-                    matched_secret_patterns: Vec::new(),
-                    matched_system_prompt_fragments: Vec::new(),
-                    exposure_score: 0,
-                };
-
-                (i, result)
-            }
-        })
-        .collect();
-
-    // Collect results as they arrive; call on_result live for each
-    let mut ordered: Vec<Option<AttackResult>> = (0..payloads.len()).map(|_| None).collect();
-    while let Some((i, result)) = futs.next().await {
-        on_result(&result);
-        ordered[i] = Some(result);
-    }
-
-    // Flatten preserving original payload order
-    Ok(ordered.into_iter().flatten().collect())
 }

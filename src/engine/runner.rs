@@ -7,7 +7,7 @@
 use crate::attacks::{Attack, AttackConfig, AttackResult};
 use crate::engine::session::{AttackRun, ProviderMetadata, SessionConfig, TestSession};
 use crate::generator;
-use crate::payloads::loader::PayloadLoader;
+use crate::payloads::loader::{HarmLevel, PayloadLoader};
 use crate::providers::traits::LLMProvider;
 use anyhow::Result;
 use std::sync::Arc;
@@ -80,9 +80,9 @@ impl AttackRunner {
                 )
             })
             .count();
-        let review_only_count = results
+        let review_only_count = payloads
             .iter()
-            .filter(|r| r.harm_level == crate::payloads::loader::HarmLevel::L1)
+            .filter(|payload| payload.harm_level == HarmLevel::L1)
             .count();
         let inconclusive_count =
             total - refused_count - success_count - partial_count - informational_count;

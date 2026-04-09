@@ -102,14 +102,22 @@ still demonstrates a real architectural failure pattern."#
                         )
                         .await;
 
-                    let (response_text, latency_ms, tokens_used, evaluation, model_used, signals) =
+                    let (
+                        response_text,
+                        latency_ms,
+                        tokens_used,
+                        evaluation,
+                        model_used,
+                        evidence,
+                        damage,
+                    ) =
                         match response {
                             Ok(response) => {
                                 let latency_ms = start.elapsed().as_millis() as u64;
                                 let tokens_used = response
                                     .completion_tokens
-                                    .map(|completion| response.prompt_tokens.unwrap_or(0) + completion);
-                                let (evaluation, signals) =
+                                        .map(|completion| response.prompt_tokens.unwrap_or(0) + completion);
+                                let (evaluation, evidence, damage) =
                                     evaluator.evaluate(&response, payload, &definition, &envelope);
                                 (
                                     response.text,
@@ -117,7 +125,8 @@ still demonstrates a real architectural failure pattern."#
                                     tokens_used,
                                     evaluation,
                                     Some(response.model),
-                                    signals,
+                                    evidence,
+                                    damage,
                                 )
                             }
                             Err(error) => (
@@ -126,7 +135,8 @@ still demonstrates a real architectural failure pattern."#
                                 None,
                                 crate::engine::evaluator::EvaluationResult::Inconclusive,
                                 None,
-                                crate::scenarios::types::ExposureSignals::default(),
+                                crate::engine::damage::AttackEvidence::default(),
+                                crate::engine::damage::DamageAssessment::default(),
                             ),
                         };
 
@@ -135,19 +145,14 @@ still demonstrates a real architectural failure pattern."#
                         payload_name: payload.name.clone(),
                         prompt_sent: payload.prompt.clone(),
                         response_received: response_text,
-                        harm_level: payload.harm_level.clone(),
                         evaluation,
                         latency_ms,
                         tokens_used,
                         model_used,
                         generated: payload.generated,
                         seed_payload_id: payload.seed_payload_id.clone(),
-                        matched_canaries: signals.matched_canaries,
-                        matched_sensitive_fields: signals.matched_sensitive_fields,
-                        matched_documents: signals.matched_documents,
-                        matched_secret_patterns: signals.matched_secret_patterns,
-                        matched_system_prompt_fragments: signals.matched_system_prompt_fragments,
-                        exposure_score: signals.exposure_score,
+                        evidence,
+                        damage,
                     };
 
                     (index, result)

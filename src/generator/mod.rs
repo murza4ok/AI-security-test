@@ -7,6 +7,7 @@ use crate::attacks::Attack;
 use crate::payloads::loader::Payload;
 use crate::providers::traits::{LLMProvider, RequestConfig};
 use anyhow::{Context, Result};
+use tracing::warn;
 use serde::Deserialize;
 use std::time::{Duration, Instant};
 
@@ -87,7 +88,7 @@ pub async fn generate_payloads(
             seed.prompt
         );
 
-        let response = tokio::time::timeout(
+        let response = match tokio::time::timeout(
             remaining_budget,
             generator_provider.complete(
                 Some(GENERATOR_SYSTEM_PROMPT),
@@ -99,11 +100,27 @@ pub async fn generate_payloads(
             ),
         )
         .await
-        .context("generator time budget exceeded")?
-            .with_context(|| format!("Generator failed for seed {}", seed.id))?;
+        {
+            Ok(Ok(response)) => response,
+            Ok(Err(error)) => {
+                warn!("generator failed for seed {}: {}", seed.id, error);
+                continue;
+            }
+            Err(_) => {
+                warn!("generator time budget exceeded while processing seed {}", seed.id);
+                break;
+            }
+        };
 
-        let parsed = parse_generated_payload(&response.text)
-            .with_context(|| format!("Generator returned invalid JSON for seed {}", seed.id))?;
+        let parsed = match parse_generated_payload(&response.text)
+            .with_context(|| format!("Generator returned invalid JSON for seed {}", seed.id))
+        {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                warn!("{error:#}");
+                continue;
+            }
+        };
 
         generated.push(Payload {
             id: format!("generated_{}_{}", seed.id, index + 1),
@@ -184,6 +201,125 @@ impl GenerationConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::providers::traits::{LLMResponse, ProviderError};
+    use async_trait::async_trait;
+
+    struct StaticProvider {
+        response: Result<String, ProviderError>,
+    }
+
+    #[async_trait]
+    impl LLMProvider for StaticProvider {
+        fn name(&self) -> &str {
+            "static-provider"
+        }
+
+        fn id(&self) -> &str {
+            "static"
+        }
+
+        fn configured_model(&self) -> &str {
+            "static-model"
+        }
+
+        fn supports_system_prompt(&self) -> bool {
+            true
+        }
+
+        async fn complete(
+            &self,
+            _system_prompt: Option<&str>,
+            _user_message: &str,
+            _config: &RequestConfig,
+        ) -> Result<LLMResponse, ProviderError> {
+            match &self.response {
+                Ok(text) => Ok(LLMResponse {
+                    text: text.clone(),
+                    model: "static-model".to_string(),
+                    prompt_tokens: None,
+                    completion_tokens: None,
+                    latency_ms: 1,
+                }),
+                Err(error) => Err(match error {
+                    ProviderError::AuthError => ProviderError::AuthError,
+                    ProviderError::RateLimited { retry_after_secs } => ProviderError::RateLimited {
+                        retry_after_secs: *retry_after_secs,
+                    },
+                    ProviderError::NetworkError(err) => {
+                        ProviderError::ParseError(err.to_string())
+                    }
+                    ProviderError::ParseError(msg) => ProviderError::ParseError(msg.clone()),
+                    ProviderError::ApiError { status, message } => ProviderError::ApiError {
+                        status: *status,
+                        message: message.clone(),
+                    },
+                    ProviderError::Timeout { timeout_secs } => ProviderError::Timeout {
+                        timeout_secs: *timeout_secs,
+                    },
+                    ProviderError::NotConfigured => ProviderError::NotConfigured,
+                }),
+            }
+        }
+
+        async fn health_check(&self) -> Result<(), ProviderError> {
+            Ok(())
+        }
+    }
+
+    struct TestAttack;
+
+    #[async_trait]
+    impl Attack for TestAttack {
+        fn id(&self) -> &str {
+            "test"
+        }
+
+        fn name(&self) -> &str {
+            "Test"
+        }
+
+        fn description(&self) -> &str {
+            "Test attack"
+        }
+
+        fn educational_explainer(&self) -> &str {
+            "Test"
+        }
+
+        fn resources(&self) -> Vec<crate::attacks::ResourceLink> {
+            Vec::new()
+        }
+
+        fn load_payloads(&self, _loader: &crate::payloads::loader::PayloadLoader) -> Result<Vec<Payload>> {
+            Ok(Vec::new())
+        }
+
+        async fn execute(
+            &self,
+            _provider: &dyn LLMProvider,
+            _payloads: &[Payload],
+            _config: &crate::attacks::AttackConfig,
+            _on_result: &(dyn for<'r> Fn(&'r crate::attacks::AttackResult) + Send + Sync),
+        ) -> Result<Vec<crate::attacks::AttackResult>> {
+            Ok(Vec::new())
+        }
+    }
+
+    fn seed_payload() -> Payload {
+        Payload {
+            id: "seed".to_string(),
+            name: "Seed".to_string(),
+            description: "seed".to_string(),
+            prompt: "prompt".to_string(),
+            expected_refusal_keywords: Vec::new(),
+            success_indicators: Vec::new(),
+            harm_level: crate::payloads::loader::HarmLevel::L2,
+            severity: None,
+            notes: None,
+            generated: false,
+            seed_payload_id: None,
+        }
+    }
 
     #[test]
     fn parses_plain_json_response() {
@@ -206,5 +342,23 @@ mod tests {
         assert_eq!(config.strategy_for_index(0), MutationStrategy::Paraphrase);
         assert_eq!(config.strategy_for_index(1), MutationStrategy::Obfuscation);
         assert_eq!(config.strategy_for_index(2), MutationStrategy::Escalation);
+    }
+
+    #[tokio::test]
+    async fn skips_invalid_generator_output_instead_of_failing_run() {
+        let provider = StaticProvider {
+            response: Ok("not json".to_string()),
+        };
+        let attack = TestAttack;
+        let generated = generate_payloads(
+            &provider,
+            &attack,
+            &[seed_payload()],
+            &GenerationConfig::with_defaults(1),
+        )
+        .await
+        .unwrap();
+
+        assert!(generated.is_empty());
     }
 }
