@@ -151,9 +151,14 @@ still demonstrates a real architectural failure pattern."#
                         model_used,
                         generated: payload.generated,
                         seed_payload_id: payload.seed_payload_id.clone(),
+                        confidence: 0.0,
+                        requires_review: false,
+                        rationale: String::new(),
                         evidence,
                         damage,
                     };
+                    let mut result = result;
+                    result.refresh_evaluation_metadata();
 
                     (index, result)
                 }

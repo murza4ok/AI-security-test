@@ -180,12 +180,26 @@ fn collect_success_reasons(signals: &ExposureSignals) -> Vec<String> {
 }
 
 fn signals_to_evidence(signals: &ExposureSignals) -> AttackEvidence {
+    let mut evidence_slices = Vec::new();
+    evidence_slices.extend(signals.matched_canaries.iter().cloned());
+    evidence_slices.extend(signals.matched_documents.iter().cloned());
+    evidence_slices.extend(signals.matched_system_prompt_fragments.iter().cloned());
+    evidence_slices.extend(
+        signals
+            .matched_sensitive_fields
+            .iter()
+            .map(|field| format!("sensitive_field:{field}")),
+    );
+    evidence_slices.sort();
+    evidence_slices.dedup();
+
     AttackEvidence {
         canaries: signals.matched_canaries.clone(),
         sensitive_fields: signals.matched_sensitive_fields.clone(),
         documents: signals.matched_documents.clone(),
         secret_patterns: signals.matched_secret_patterns.clone(),
         system_prompt_fragments: signals.matched_system_prompt_fragments.clone(),
+        evidence_slices,
     }
 }
 

@@ -7,8 +7,18 @@ pub struct ScenarioManifest {
     pub name: String,
     #[serde(rename = "type")]
     pub scenario_type: String,
+    #[serde(default = "default_scenario_version")]
+    pub version: String,
+    #[serde(default)]
+    pub defense_profile: Option<String>,
     pub context: ScenarioContextConfig,
     pub sensitivity: SensitivityManifest,
+    #[serde(default)]
+    pub threat_model: ThreatModelManifest,
+}
+
+fn default_scenario_version() -> String {
+    "1.0".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,6 +30,26 @@ pub struct ScenarioContextConfig {
     pub top_n: Option<usize>,
     #[serde(default)]
     pub memory_enabled: bool,
+    #[serde(default = "default_prompt_placement")]
+    pub prompt_placement: String,
+    #[serde(default = "default_hidden_context_policy")]
+    pub hidden_context_policy: String,
+    #[serde(default)]
+    pub mask_pii: bool,
+    #[serde(default = "default_include_secret_store")]
+    pub include_secret_store: bool,
+}
+
+fn default_prompt_placement() -> String {
+    "system".to_string()
+}
+
+fn default_hidden_context_policy() -> String {
+    "raw".to_string()
+}
+
+fn default_include_secret_store() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +60,22 @@ pub struct SensitivityManifest {
     pub pii_fields: Vec<String>,
     #[serde(default)]
     pub credential_patterns: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ThreatModelManifest {
+    #[serde(default)]
+    pub protected_assets: Vec<String>,
+    #[serde(default)]
+    pub attacker_capabilities: Vec<String>,
+    #[serde(default)]
+    pub trust_boundaries: Vec<String>,
+    #[serde(default)]
+    pub expected_safe_behavior: Vec<String>,
+    #[serde(default)]
+    pub expected_failure_modes: Vec<String>,
+    #[serde(default)]
+    pub severity_mapping: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

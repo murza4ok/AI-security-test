@@ -192,6 +192,8 @@ pub async fn run_attacks_and_display(
         session.scenario.scenario_id = Some(definition.manifest.id.clone());
         session.scenario.scenario_name = Some(definition.manifest.name.clone());
         session.scenario.scenario_type = Some(definition.manifest.scenario_type.clone());
+        session.scenario.scenario_version = Some(definition.manifest.version.clone());
+        session.scenario.defense_profile = definition.manifest.defense_profile.clone();
         session.scenario.sensitive_assets_count =
             definition.hidden_assets.len() + definition.retrieval_assets.len();
         session.scenario.canary_count = definition.canaries.len();

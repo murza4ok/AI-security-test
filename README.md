@@ -8,6 +8,18 @@
 
 Основной runtime сейчас — это CLI. Следующий крупный этап развития проекта зафиксирован в [ROADMAP_SECOND_ARTICLE.md](ROADMAP_SECOND_ARTICLE.md): отдельный защищенный web-target, который `ai-sec` будет атаковать по HTTP.
 
+## Карта документации
+
+Живая документация проекта разделена так:
+
+- [README.md](README.md) — быстрый старт, режимы CLI и пользовательский запуск.
+- [Architecture.md](Architecture.md) — текущая архитектурная схема и устройство подсистем.
+- [TZ.md](TZ.md) — целевое техническое задание проекта.
+- [Roadmap_weekend.md](Roadmap_weekend.md) — итоговый чек-лист выходной итерации.
+- [Branch_tasks.md](Branch_tasks.md) — разбиение roadmap на ветки разработки.
+- [docs/README.md](docs/README.md) — индекс активной документации в `docs/`.
+- [refactoring.md](refactoring.md) — технический аудит текущих проблем и долга.
+
 ## Что умеет инструмент
 
 - запускать curated payload-атаки по нескольким attack family;
@@ -31,7 +43,7 @@
 Чтобы увидеть фактическое число payload-ов в текущей версии репозитория, используйте:
 
 ```bash
-cargo run -- list
+cargo run --bin ai-sec -- list
 ```
 
 ## Схема воркфлоу
@@ -141,7 +153,7 @@ CONCURRENCY=5
 
 ```bash
 cargo build
-cargo run -- check
+cargo run --bin ai-sec -- check
 ```
 
 ## Режимы работы CLI
@@ -153,7 +165,7 @@ cargo run -- check
 Запуск без подкоманды открывает меню на базе `dialoguer`.
 
 ```bash
-cargo run --
+cargo run --bin ai-sec --
 ```
 
 Что доступно из меню:
@@ -176,13 +188,13 @@ cargo run --
 Одна категория:
 
 ```bash
-cargo run -- run --attack jailbreaking --provider deepseek
+cargo run --bin ai-sec -- run --attack jailbreaking --provider deepseek
 ```
 
 Несколько категорий за один прогон:
 
 ```bash
-cargo run -- run \
+cargo run --bin ai-sec -- run \
   --attack prompt_injection \
   --attack extraction \
   --provider openai
@@ -191,7 +203,7 @@ cargo run -- run \
 С ограничением количества payload-ов:
 
 ```bash
-cargo run -- run --attack token_attacks --provider ollama --limit 3
+cargo run --bin ai-sec -- run --attack token_attacks --provider ollama --limit 3
 ```
 
 Когда использовать:
@@ -206,7 +218,7 @@ cargo run -- run --attack token_attacks --provider ollama --limit 3
 Пример:
 
 ```bash
-cargo run -- run --attack prompt_injection --provider deepseek --generated 3
+cargo run --bin ai-sec -- run --attack prompt_injection --provider deepseek --generated 3
 ```
 
 Как это работает:
@@ -239,9 +251,9 @@ cargo run -- run --attack prompt_injection --provider deepseek --generated 3
 Базовые примеры:
 
 ```bash
-cargo run -- run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot
-cargo run -- run --attack sensitive_data_exposure --provider ollama --app-scenario hr_bot
-cargo run -- run --attack sensitive_data_exposure --provider ollama --app-scenario internal_rag_bot
+cargo run --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot
+cargo run --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --app-scenario hr_bot
+cargo run --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --app-scenario internal_rag_bot
 ```
 
 Доступные сценарии в репозитории:
@@ -263,7 +275,7 @@ cargo run -- run --attack sensitive_data_exposure --provider ollama --app-scenar
 Примеры:
 
 ```bash
-cargo run -- run \
+cargo run --bin ai-sec -- run \
   --attack sensitive_data_exposure \
   --provider ollama \
   --app-scenario internal_rag_bot \
@@ -271,7 +283,7 @@ cargo run -- run \
 ```
 
 ```bash
-cargo run -- run \
+cargo run --bin ai-sec -- run \
   --attack sensitive_data_exposure \
   --provider ollama \
   --app-scenario support_bot_hardened \
@@ -290,7 +302,7 @@ cargo run -- run \
 Показывает explainer по attack category: что это за техника, зачем она нужна и какие материалы почитать.
 
 ```bash
-cargo run -- explain jailbreaking
+cargo run --bin ai-sec -- explain jailbreaking
 ```
 
 Когда использовать:
@@ -303,8 +315,8 @@ cargo run -- explain jailbreaking
 Проверяет только те провайдеры, которые настроены в `.env`, либо конкретный провайдер через `--provider`.
 
 ```bash
-cargo run -- check
-cargo run -- check --provider ollama
+cargo run --bin ai-sec -- check
+cargo run --bin ai-sec -- check --provider ollama
 ```
 
 Для `ollama` health check проверяет не только доступность демона, но и наличие настроенной модели. Если получили `model not found`, исправьте `OLLAMA_MODEL` в `.env` или передайте валидную модель через `--model` при запуске атаки.
@@ -316,25 +328,25 @@ cargo run -- check --provider ollama
 Обзор всех сессий:
 
 ```bash
-cargo run -- sessions
+cargo run --bin ai-sec -- sessions
 ```
 
 Просмотр одной сессии:
 
 ```bash
-cargo run -- review results/<file>.json
+cargo run --bin ai-sec -- review results/<file>.json
 ```
 
 Сравнение нескольких отчетов:
 
 ```bash
-cargo run -- compare results/file1.json results/file2.json
+cargo run --bin ai-sec -- compare results/file1.json results/file2.json
 ```
 
 Сравнение всех отчетов из `results/`:
 
 ```bash
-cargo run -- compare
+cargo run --bin ai-sec -- compare
 ```
 
 Когда использовать:
@@ -345,7 +357,7 @@ cargo run -- compare
 ## Основные флаги `run`
 
 ```bash
-cargo run -- help run
+cargo run --bin ai-sec -- help run
 ```
 
 Наиболее важные параметры:
@@ -404,26 +416,26 @@ results/YYYY-MM-DD_HH-MM-SS_<provider>.json
 Минимальный smoke-тест:
 
 ```bash
-cargo run -- check
-cargo run -- list
+cargo run --bin ai-sec -- check
+cargo run --bin ai-sec -- list
 ```
 
 Классический запуск:
 
 ```bash
-cargo run -- run --attack prompt_injection --provider deepseek
+cargo run --bin ai-sec -- run --attack prompt_injection --provider deepseek
 ```
 
 Генеративный запуск:
 
 ```bash
-cargo run -- run --attack prompt_injection --provider deepseek --generated 2
+cargo run --bin ai-sec -- run --attack prompt_injection --provider deepseek --generated 2
 ```
 
 Сценарная атака:
 
 ```bash
-cargo run -- run \
+cargo run --bin ai-sec -- run \
   --attack sensitive_data_exposure \
   --provider ollama \
   --app-scenario support_bot \
@@ -433,7 +445,7 @@ cargo run -- run \
 Сравнение результатов:
 
 ```bash
-cargo run -- compare
+cargo run --bin ai-sec -- compare
 ```
 
 ## Ограничения текущей версии

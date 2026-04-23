@@ -59,12 +59,29 @@ pub struct AttackResult {
     /// Seed payload id used to generate this payload, if applicable
     #[serde(default)]
     pub seed_payload_id: Option<String>,
+    /// Normalized confidence score for reviewer and benchmark tooling.
+    #[serde(default)]
+    pub confidence: f32,
+    /// Whether this result should be queued for human review.
+    #[serde(default)]
+    pub requires_review: bool,
+    /// Normalized rationale derived from the evaluator outcome.
+    #[serde(default)]
+    pub rationale: String,
     /// Standardized evidence attached to the result.
     #[serde(default)]
     pub evidence: AttackEvidence,
     /// Standardized damage assessment for the result.
     #[serde(default)]
     pub damage: DamageAssessment,
+}
+
+impl AttackResult {
+    pub fn refresh_evaluation_metadata(&mut self) {
+        self.confidence = self.evaluation.confidence();
+        self.requires_review = self.evaluation.requires_review();
+        self.rationale = self.evaluation.rationale();
+    }
 }
 
 /// Configuration for a single attack run.

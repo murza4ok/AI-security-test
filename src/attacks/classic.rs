@@ -62,7 +62,8 @@ pub async fn run_classic_payloads(
                         ),
                     };
 
-                let result = AttackResult {
+                let evidence = build_classic_evidence(&evaluation);
+                let mut result = AttackResult {
                     payload_id: payload.id.clone(),
                     payload_name: payload.name.clone(),
                     prompt_sent: payload.prompt.clone(),
@@ -73,9 +74,13 @@ pub async fn run_classic_payloads(
                     model_used,
                     generated: payload.generated,
                     seed_payload_id: payload.seed_payload_id.clone(),
-                    evidence: AttackEvidence::default(),
+                    confidence: 0.0,
+                    requires_review: false,
+                    rationale: String::new(),
+                    evidence,
                     damage: build_classic_damage(&payload.harm_level),
                 };
+                result.refresh_evaluation_metadata();
 
                 (index, result)
             }
@@ -116,5 +121,19 @@ pub fn build_classic_damage(harm_level: &HarmLevel) -> DamageAssessment {
         level,
         score: 0,
         summary,
+    }
+}
+
+fn build_classic_evidence(evaluation: &EvaluationResult) -> AttackEvidence {
+    let evidence_slices = match evaluation {
+        EvaluationResult::Refused { matched_phrases, .. }
+        | EvaluationResult::Success { matched_phrases, .. } => matched_phrases.clone(),
+        EvaluationResult::Partial { notes } => vec![notes.clone()],
+        EvaluationResult::Informational | EvaluationResult::Inconclusive => Vec::new(),
+    };
+
+    AttackEvidence {
+        evidence_slices,
+        ..AttackEvidence::default()
     }
 }

@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const REPORT_SCHEMA_VERSION: u32 = 2;
+pub const REPORT_SCHEMA_VERSION: u32 = 3;
 
 /// Scenario-level metadata for synthetic sensitive-data exposure runs.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -19,6 +19,10 @@ pub struct ScenarioMetadata {
     pub scenario_name: Option<String>,
     #[serde(default)]
     pub scenario_type: Option<String>,
+    #[serde(default)]
+    pub scenario_version: Option<String>,
+    #[serde(default)]
+    pub defense_profile: Option<String>,
     #[serde(default)]
     pub sensitive_assets_count: usize,
     #[serde(default)]
@@ -66,6 +70,9 @@ pub struct AttackRun {
 impl AttackRun {
     /// Recompute derived metrics from the current counters.
     pub fn refresh_metrics(&mut self) {
+        for result in &mut self.results {
+            result.refresh_evaluation_metadata();
+        }
         self.generated_payloads = self.results.iter().filter(|result| result.generated).count();
         self.scoreable_payloads = self
             .payloads_tested
@@ -328,12 +335,16 @@ mod tests {
             model_used: Some("model".to_string()),
             generated: true,
             seed_payload_id: Some("seed".to_string()),
+            confidence: 0.0,
+            requires_review: false,
+            rationale: String::new(),
             evidence: AttackEvidence {
                 canaries: vec!["canary".to_string()],
                 sensitive_fields: vec!["email".to_string()],
                 documents: vec!["doc".to_string()],
                 secret_patterns: vec!["api_key".to_string()],
                 system_prompt_fragments: vec!["fragment".to_string()],
+                evidence_slices: vec!["fragment".to_string()],
             },
             damage: DamageAssessment {
                 level: DamageLevel::H3,
@@ -346,6 +357,49 @@ mod tests {
         assert!(result.generated);
         assert_eq!(result.seed_payload_id.as_deref(), Some("seed"));
         assert_eq!(result.damage.score, 20);
+    }
+
+    #[test]
+    fn attack_run_refreshes_evaluation_metadata() {
+        let mut run = AttackRun {
+            attack_id: "test".to_string(),
+            attack_name: "Test".to_string(),
+            payloads_tested: 1,
+            refused_count: 0,
+            success_count: 0,
+            partial_count: 1,
+            inconclusive_count: 0,
+            informational_count: 0,
+            review_only_count: 0,
+            scoreable_payloads: 0,
+            bypass_rate_pct: 0.0,
+            generated_payloads: 0,
+            duration_ms: 1,
+            results: vec![AttackResult {
+                payload_id: "id".to_string(),
+                payload_name: "name".to_string(),
+                prompt_sent: "prompt".to_string(),
+                response_received: "response".to_string(),
+                evaluation: EvaluationResult::Partial {
+                    notes: "Needs manual review".to_string(),
+                },
+                latency_ms: 1,
+                tokens_used: None,
+                model_used: None,
+                generated: false,
+                seed_payload_id: None,
+                confidence: 0.0,
+                requires_review: false,
+                rationale: String::new(),
+                evidence: AttackEvidence::default(),
+                damage: DamageAssessment::default(),
+            }],
+        };
+
+        run.refresh_metrics();
+        assert!(run.results[0].requires_review);
+        assert!(run.results[0].confidence > 0.0);
+        assert!(run.results[0].rationale.contains("manual review"));
     }
 
     #[test]

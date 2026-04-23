@@ -26,6 +26,12 @@ pub fn print_session_summary(session: &TestSession) {
     }
     if let Some(scenario_name) = &session.scenario.scenario_name {
         println!("  Scenario: {}", scenario_name.bold());
+        if let Some(version) = &session.scenario.scenario_version {
+            println!("  Scenario version: {}", version.bold());
+        }
+        if let Some(defense_profile) = &session.scenario.defense_profile {
+            println!("  Defense profile: {}", defense_profile.bold());
+        }
         println!(
             "  Exposure score: {} | leaked canaries: {} | leaked pii fields: {} | leaked documents: {}",
             session.scenario.exposure_score,
@@ -287,6 +293,20 @@ pub fn print_session_review(session: &TestSession) {
                     result.evidence.system_prompt_fragments.join(" | ").yellow()
                 );
             }
+            if !result.evidence.evidence_slices.is_empty() {
+                println!(
+                    "       -> evidence slices: {}",
+                    result
+                        .evidence
+                        .evidence_slices
+                        .iter()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                        .dimmed()
+                );
+            }
             if result.damage.score > 0 {
                 println!("       -> damage score: {}", result.damage.score.to_string().red());
                 println!(
@@ -301,30 +321,40 @@ pub fn print_session_review(session: &TestSession) {
                     result.damage.summary.dimmed()
                 );
             }
+            println!("       -> confidence: {:.0}%", result.confidence * 100.0);
+            println!(
+                "       -> requires review: {}",
+                if result.requires_review {
+                    "yes".yellow().to_string()
+                } else {
+                    "no".green().to_string()
+                }
+            );
+            if !result.rationale.is_empty() {
+                println!("       -> rationale: {}", result.rationale.dimmed());
+            }
 
             match &result.evaluation {
                 crate::engine::evaluator::EvaluationResult::Refused {
                     matched_phrases,
-                    confidence,
+                    ..
                 } => {
                     println!(
-                        "       -> confidence: {:.0}%  signals: {}",
-                        confidence * 100.0,
+                        "       -> refusal signals: {}",
                         matched_phrases.join(", ").dimmed()
                     );
                 }
                 crate::engine::evaluator::EvaluationResult::Success {
                     matched_phrases,
-                    confidence,
+                    ..
                 } => {
                     println!(
-                        "       -> confidence: {:.0}%  bypass reason: {}",
-                        confidence * 100.0,
+                        "       -> bypass signals: {}",
                         matched_phrases.join(", ").dimmed()
                     );
                 }
                 crate::engine::evaluator::EvaluationResult::Partial { notes } => {
-                    println!("       -> {}", notes.dimmed());
+                    println!("       -> partial notes: {}", notes.dimmed());
                 }
                 crate::engine::evaluator::EvaluationResult::Informational => {
                     println!("{}", "       -> L0 informational response".dimmed());
