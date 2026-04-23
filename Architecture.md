@@ -1,95 +1,119 @@
-# ai-sec Architecture
+# AI-security-test Architecture
 
 ## Purpose
 
-`ai-sec` is a Rust CLI tool for educational testing of LLM security behavior.
-It loads attack payloads from TOML files, sends them to configured providers,
-evaluates model responses heuristically, and stores terminal + JSON reports for
-later comparison.
+The repository contains two separate runtime subsystems:
+- `ai-sec` as the attacking CLI runtime
+- `web_target` as the demo target web runtime
+
+They live in one monorepo, but they do not form a single in-process runtime.
+This document describes the runtime boundary first and then the internal
+architecture of the current `ai-sec` runtime.
+
+## Runtime Boundary Contract
+
+Runtime ownership:
+- `ai-sec` starts from `src/main.rs` via `cargo run --bin ai-sec -- ...`
+- `web_target` starts from `src/bin/web_target.rs` via `cargo run --bin web_target --`
+
+Supported interaction model:
+- `ai-sec` talks to model providers directly today
+- `web_target` serves browser and HTTP traffic as an independent process
+- future `ai-sec -> web_target` integration goes only through external HTTP
+  endpoints and request/response contracts
+
+Allowed shared contract layer:
+- HTTP surface of `web_target`: `/health`, `/login`, `/chat`, `/api/chat`,
+  `/logout`
+- synthetic fixtures and scenario manifests as shared data/schema inputs
+- report metadata and evaluation schema where both runtimes need comparable
+  evidence
+- shared `.env` values for local demo convenience
+
+Not part of the contract:
+- direct calls from `ai-sec` into `src/bin/webapp/*`
+- embedding `web_target` into the `ai-sec` process
+- documentation that implies one monolithic runtime with two entry points
 
 ---
 
-## High-Level Architecture
+## High-Level Runtime View
 
 ```mermaid
 flowchart TD
-    A["User / Operator"] --> B["CLI / Interactive Menu"]
-    B --> C["main.rs"]
+    U["Operator"] --> CLI["ai-sec binary"]
+    B["Browser user"] --> WEB["web_target binary"]
 
-    C --> D["config"]
-    C --> E["attacks registry"]
-    C --> F["payload loader"]
-    C --> G["providers"]
-    C --> H["engine runner"]
-    C --> I["reporting"]
-    C --> J["education"]
+    CLI --> P["LLM providers"]
+    CLI -. future HTTP target mode .-> API["web_target HTTP API"]
+    WEB --> API
+    WEB --> DATA["Synthetic app data / policy layer"]
 
-    D --> D1[".env / environment"]
-    E --> E1["attack implementations"]
-    F --> F1["payloads/<attack>/*.toml"]
-    G --> G1["OpenAI"]
-    G --> G2["Anthropic"]
-    G --> G3["DeepSeek"]
-    G --> G4["YandexGPT"]
-    G --> G5["Ollama"]
-    H --> H1["evaluator"]
-    H --> H2["session model"]
-    I --> I1["terminal report"]
-    I --> I2["JSON report"]
+    S["Shared contract layer"] --> API
+    S --> FX["Fixtures / scenario manifests"]
+    S --> R["Report metadata / schemas"]
 ```
 
 ---
 
-## Module Layout
+## ai-sec Module Layout
 
 ```mermaid
 flowchart LR
-    M["main.rs"] --> CLI["src/cli"]
+    M["src/main.rs"] --> CLI["src/cli"]
     M --> CFG["src/config"]
-    M --> ATK["src/attacks"]
-    M --> PAY["src/payloads"]
-    M --> ENG["src/engine"]
-    M --> PRV["src/providers"]
-    M --> RPT["src/reporting"]
-    M --> EDU["src/education"]
+    M --> APP["src/app"]
 
-    ENG --> ENG1["runner.rs"]
-    ENG --> ENG2["evaluator.rs"]
-    ENG --> ENG3["session.rs"]
+    APP --> APP1["interactive.rs"]
+    APP --> APP2["runtime.rs"]
+    APP --> APP3["providers.rs"]
+    APP --> APP4["scenarios.rs"]
 
-    PRV --> PRV1["traits.rs"]
-    PRV --> PRV2["provider implementations"]
+    APP2 --> ATK["src/attacks"]
+    APP2 --> PAY["src/payloads"]
+    APP2 --> GEN["src/generator"]
+    APP2 --> SCN["src/scenarios"]
+    APP2 --> ENG["src/engine"]
+    APP2 --> PRV["src/providers"]
+    APP2 --> RPT["src/reporting"]
+    APP1 --> EDU["src/education"]
 
+    ATK --> ATK1["registry.rs + attack families"]
     PAY --> PAY1["loader.rs"]
-    PAY --> PAY2["template.rs"]
-
-    ATK --> ATK1["registry.rs"]
-    ATK --> ATK2["attack files"]
+    GEN --> GEN1["generated payload mode"]
+    SCN --> SCN1["builder / loader / retrieval / evaluator"]
+    ENG --> ENG1["runner.rs / evaluator.rs / session.rs"]
+    PRV --> PRV1["traits.rs + provider implementations"]
+    RPT --> RPT1["terminal_report.rs / json_report.rs"]
 ```
 
 ---
 
-## Main Workflow
+## ai-sec Main Workflow
 
 ```mermaid
 flowchart TD
-    A["User runs ai-sec"] --> B["CLI parsing"]
-    B --> C["Load AppConfig from .env / env"]
-    C --> D["Build provider instances"]
-    D --> E["Resolve selected attack categories"]
-    E --> F["Load payloads from TOML"]
-    F --> G["Create AttackRunner"]
-    G --> H["Run attacks per provider"]
-    H --> I["Send payloads to model"]
-    I --> J["Evaluate responses"]
-    J --> K["Aggregate into TestSession"]
-    K --> L["Print terminal summary"]
-    K --> M["Write JSON report"]
+    A["User runs ai-sec"] --> B["Cli::parse() in src/main.rs"]
+    B --> C["AppConfig::from_env()"]
+    C --> D["app::run(cli, app_config)"]
+
+    D --> E1["interactive::run_interactive() when no subcommand"]
+    D --> E2["runtime::run_command() when subcommand is present"]
+
+    E2 --> F["Resolve provider(s), attacks, optional scenario, optional generated mode"]
+    F --> G["Load payloads / scenario assets"]
+    G --> H["Create AttackRunner"]
+    H --> I["Run attacks per provider"]
+    I --> J["provider.complete(...)"]
+    J --> K["engine evaluator + scenario evaluator"]
+    K --> L["Build TestSession"]
+    L --> M["terminal_report"]
+    L --> N["json_report"]
 ```
 
 ---
 
-## Runtime Sequence
+## ai-sec Runtime Sequence
 
 ```mermaid
 sequenceDiagram
