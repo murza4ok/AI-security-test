@@ -4,7 +4,6 @@
 //! structured `Payload` objects. Each TOML file maps to one `PayloadFile`.
 
 use anyhow::{Context, Result};
-use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -123,17 +122,22 @@ impl PayloadLoader {
         }
 
         let mut payloads = Vec::new();
-        for entry in std::fs::read_dir(&dir)
+        let mut paths = std::fs::read_dir(&dir)
             .with_context(|| format!("Failed to read directory: {}", dir.display()))?
-        {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("toml") {
-                let mut file_payloads = self
-                    .load_file(&path)
-                    .with_context(|| format!("Failed to load: {}", path.display()))?;
-                payloads.append(&mut file_payloads);
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<std::io::Result<Vec<_>>>()
+            .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
+        paths.sort();
+
+        for path in paths {
+            if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+                continue;
             }
+
+            let mut file_payloads = self
+                .load_file(&path)
+                .with_context(|| format!("Failed to load: {}", path.display()))?;
+            payloads.append(&mut file_payloads);
         }
 
         Ok(payloads)
@@ -162,12 +166,112 @@ impl PayloadLoader {
         Ok(payloads)
     }
 
-    /// Return up to `count` payloads sampled randomly from the provided slice.
+    /// Return up to `count` payloads from the provided slice in stable order.
     pub fn sample_payloads(&self, payloads: &[Payload], count: usize) -> Vec<Payload> {
-        let mut rng = rand::thread_rng();
-        let mut sampled = payloads.to_vec();
-        sampled.shuffle(&mut rng);
-        sampled.truncate(count.min(sampled.len()));
-        sampled
+        payloads.iter().take(count).cloned().collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use uuid::Uuid;
+
+    fn unique_temp_dir() -> PathBuf {
+        let path = std::env::temp_dir().join(format!("ai-sec-loader-{}", Uuid::new_v4()));
+        fs::create_dir_all(&path).expect("failed to create temp dir");
+        path
+    }
+
+    fn write_payload_file(path: &Path, ids: &[&str]) {
+        let payloads = ids
+            .iter()
+            .map(|id| {
+                format!(
+                    r#"[[payloads]]
+id = "{id}"
+name = "{id}"
+description = "desc"
+prompt = "prompt {id}"
+"#
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let content = format!(
+            r#"[metadata]
+attack_type = "demo"
+variant = "test"
+severity = "medium"
+
+{payloads}
+"#
+        );
+
+        fs::write(path, content).expect("failed to write payload file");
+    }
+
+    #[test]
+    fn load_category_reads_toml_files_in_lexicographic_order() {
+        let root = unique_temp_dir();
+        let category_dir = root.join("demo");
+        fs::create_dir_all(&category_dir).expect("failed to create category dir");
+        write_payload_file(&category_dir.join("b.toml"), &["b1"]);
+        write_payload_file(&category_dir.join("a.toml"), &["a1", "a2"]);
+
+        let loader = PayloadLoader::new(&root);
+        let payload_ids: Vec<_> = loader
+            .load_category("demo")
+            .expect("failed to load payloads")
+            .into_iter()
+            .map(|payload| payload.id)
+            .collect();
+
+        assert_eq!(payload_ids, vec!["a1", "a2", "b1"]);
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn sample_payloads_keeps_input_order() {
+        let loader = PayloadLoader::new("payloads");
+        let payloads = vec![
+            Payload {
+                id: "first".to_string(),
+                name: "First".to_string(),
+                description: "desc".to_string(),
+                prompt: "prompt".to_string(),
+                expected_refusal_keywords: Vec::new(),
+                success_indicators: Vec::new(),
+                harm_level: HarmLevel::L1,
+                severity: Some("medium".to_string()),
+                notes: None,
+                generated: false,
+                seed_payload_id: None,
+            },
+            Payload {
+                id: "second".to_string(),
+                name: "Second".to_string(),
+                description: "desc".to_string(),
+                prompt: "prompt".to_string(),
+                expected_refusal_keywords: Vec::new(),
+                success_indicators: Vec::new(),
+                harm_level: HarmLevel::L1,
+                severity: Some("medium".to_string()),
+                notes: None,
+                generated: false,
+                seed_payload_id: None,
+            },
+        ];
+
+        let sampled_ids: Vec<_> = loader
+            .sample_payloads(&payloads, 2)
+            .into_iter()
+            .map(|payload| payload.id)
+            .collect();
+
+        assert_eq!(sampled_ids, vec!["first", "second"]);
     }
 }
