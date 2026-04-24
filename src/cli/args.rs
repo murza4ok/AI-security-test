@@ -9,8 +9,8 @@ use std::path::PathBuf;
 #[command(
     name = "ai-sec",
     about = "CLI-инструмент для тестирования безопасности LLM и LLM-приложений",
-    long_about = "ai-sec помогает исследовать уязвимости LLM, проводить сценарные red-team прогоны, запускать генеративные атаки и сравнивать результаты между моделями и провайдерами.\nИнструмент предназначен только для учебного и авторизованного тестирования.",
-    after_help = "Быстрые примеры:\n  ai-sec list\n  ai-sec run --attack jailbreaking --provider deepseek\n  ai-sec run --attack prompt_injection --provider deepseek --generated 3\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot\n  ai-sec sessions\n\nДополнительно:\n  ai-sec help run",
+    long_about = "ai-sec помогает исследовать уязвимости LLM, проводить сценарные red-team прогоны, запускать генеративные атаки и сравнивать результаты между моделями и провайдерами.\nЗапуск без подкоманды открывает интерактивное меню.\nИнструмент предназначен только для учебного и авторизованного тестирования.",
+    after_help = "Запуск из корня репозитория:\n  cargo run --bin ai-sec -- --help\n  cargo run --bin ai-sec -- list\n  cargo run --bin ai-sec -- run --attack jailbreaking --provider deepseek\n  cargo run --bin ai-sec -- check --provider ollama\n  cargo run --bin ai-sec -- compare\n\nБыстрые примеры для уже собранного бинаря:\n  ai-sec sessions\n  ai-sec review results/<file>.json\n\nДополнительно:\n  ai-sec help run",
     version
 )]
 pub struct Cli {
@@ -30,7 +30,7 @@ pub struct Cli {
 pub enum Commands {
     /// Запустить одну или несколько категорий атак
     #[command(
-        after_help = "Примеры:\n  ai-sec run --attack prompt_injection --provider deepseek\n  ai-sec run --attack prompt_injection --provider deepseek --generated 3\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot --limit 5\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario internal_rag_bot --retrieval-mode subset"
+        after_help = "Примеры:\n  ai-sec run --attack prompt_injection --provider deepseek\n  ai-sec run --attack prompt_injection --provider deepseek --generated 3\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot --limit 5\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario internal_rag_bot --retrieval-mode subset\n\nЗамечания:\n  --app-scenario обязателен только для sensitive_data_exposure\n  --output используется только при запуске через один провайдер"
     )]
     Run {
         /// ID категории атаки: jailbreaking, prompt_injection, sensitive_data_exposure
@@ -41,7 +41,7 @@ pub enum Commands {
         #[arg(short, long)]
         model: Option<String>,
 
-        /// Сохранить JSON-отчёт в указанный файл
+        /// Сохранить JSON-отчёт в указанный файл при запуске через один провайдер
         #[arg(short, long)]
         output: Option<PathBuf>,
 
@@ -82,21 +82,27 @@ pub enum Commands {
     List,
 
     /// Показать обучающее описание категории атаки
+    #[command(after_help = "Пример:\n  ai-sec explain jailbreaking")]
     Explain {
         /// ID категории атаки
         attack: String,
     },
 
     /// Проверить доступность и конфигурацию провайдеров
+    #[command(after_help = "Примеры:\n  ai-sec check\n  ai-sec check --provider ollama")]
     Check,
 
     /// Открыть сохранённый JSON-отчёт в review-режиме
+    #[command(after_help = "Пример:\n  ai-sec review results/2026-04-02_14-30-00_ollama.json")]
     Review {
         /// Путь к JSON-отчёту, например results/2026-04-02_14-30.json
         file: PathBuf,
     },
 
     /// Сравнить несколько сессий между собой
+    #[command(
+        after_help = "Примеры:\n  ai-sec compare results/file1.json results/file2.json\n  ai-sec compare\n\nЕсли файлы не указаны, команда сравнит все JSON-отчёты из results/."
+    )]
     Compare {
         /// JSON-отчёты для сравнения; если не указаны, будут загружены все файлы из results/
         #[arg(value_name = "FILE")]
@@ -104,6 +110,7 @@ pub enum Commands {
     },
 
     /// Показать обзор сохранённых сессий в results/
+    #[command(after_help = "Пример:\n  ai-sec sessions")]
     Sessions,
 }
 

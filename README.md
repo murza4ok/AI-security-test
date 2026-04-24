@@ -188,6 +188,8 @@ cargo run --bin ai-sec -- check
 ### 1. Интерактивный режим
 
 Запуск без подкоманды открывает меню на базе `dialoguer`.
+Этот режим доступен даже без настроенного провайдера, но запуск атак из меню требует валидного `.env`
+или явного `--provider`.
 
 ```bash
 cargo run --bin ai-sec --
@@ -195,16 +197,24 @@ cargo run --bin ai-sec --
 
 Что доступно из меню:
 
-- `Run All Attacks`
-- `Select Attack Categories`
-- `Configure Provider (edit .env)`
-- `Browse Saved Sessions`
-- `Educational Mode — Learn About Attacks`
+- если провайдер настроен:
+  - `Run All Attacks On Configured Providers`
+  - `Run Selected Attack Categories`
+  - `Provider Setup Hint (.env)`
+  - `Browse Saved Sessions`
+  - `Learn About Attack Families`
+- если провайдер не настроен:
+  - `Provider Setup Hint (.env)`
+  - `Browse Saved Sessions`
+  - `Learn About Attack Families`
 
 Когда использовать:
 - если хотите быстро прогонять набор атак без запоминания аргументов;
 - если нужно посмотреть сохраненные сессии из TUI-подобного меню;
 - если это демонстрация или workshop.
+
+Ограничение:
+- пункт `Provider Setup Hint (.env)` только напоминает, где менять конфигурацию; он не редактирует `.env` автоматически.
 
 ### 2. Классический payload-driven запуск
 
@@ -392,7 +402,7 @@ cargo run --bin ai-sec -- help run
 - `--model <name>` — override модели для конкретного запуска;
 - `--limit <N>` — ограничение числа payload-ов;
 - `--generated <N>` — генерация дополнительных payload-вариантов;
-- `--output <path>` — сохранить отчет в конкретный JSON-файл;
+- `--output <path>` — сохранить отчет в конкретный JSON-файл при запуске через один провайдер;
 - `--app-scenario <id>` — включить сценарный режим;
 - `--retrieval-mode <mode>` — `full` или `subset`;
 - `--tenant <id>` и `--session-seed <seed>` — управление synthetic multi-tenant / memory-контекстом.
