@@ -241,6 +241,9 @@ cargo run --bin ai-sec -- run \
 cargo run --bin ai-sec -- run --attack token_attacks --provider ollama --limit 3
 ```
 
+`--limit` ограничивает итоговое число payload-ов в категории атаки. Если одновременно указан
+`--generated`, в этот cap входят и curated payload-ы, и generated-варианты.
+
 Когда использовать:
 - для базового сравнения моделей;
 - для smoke-тестов guardrails;
@@ -249,6 +252,9 @@ cargo run --bin ai-sec -- run --attack token_attacks --provider ollama --limit 3
 ### 3. Генеративный режим
 
 Если указать `--generated N`, `ai-sec` сначала берет существующие payload-ы как seed-ы, затем через DeepSeek генерирует до `N` новых вариантов того же attack family.
+
+Если одновременно задан `--limit`, итоговый прогон по категории не превысит `N` payload-ов суммарно:
+generated-варианты занимают часть этого лимита, а недостающие слоты добираются curated payload-ами.
 
 Пример:
 
@@ -400,7 +406,7 @@ cargo run --bin ai-sec -- help run
 - `--attack <id>` — одна или несколько категорий атак;
 - `--provider <id>` — `openai`, `anthropic`, `ollama`, `deepseek`, `yandexgpt`;
 - `--model <name>` — override модели для конкретного запуска;
-- `--limit <N>` — ограничение числа payload-ов;
+- `--limit <N>` — верхняя граница на итоговое число payload-ов в категории, включая generated-варианты;
 - `--generated <N>` — генерация дополнительных payload-вариантов;
 - `--output <path>` — сохранить отчет в конкретный JSON-файл при запуске через один провайдер;
 - `--app-scenario <id>` — включить сценарный режим;

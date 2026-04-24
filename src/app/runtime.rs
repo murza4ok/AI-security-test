@@ -102,15 +102,24 @@ pub async fn run_attacks_and_display(
     let current_category = std::sync::Mutex::new(String::new());
 
     let on_result = |attack_id: &str, result: &attacks::AttackResult| {
-        let mut current = current_category.lock().unwrap();
-        if current.as_str() != attack_id {
-            *current = attack_id.to_string();
+        let should_print_section = match current_category.lock() {
+            Ok(mut current) => {
+                if current.as_str() == attack_id {
+                    false
+                } else {
+                    *current = attack_id.to_string();
+                    true
+                }
+            }
+            Err(_) => true,
+        };
+
+        if should_print_section {
             let name = attacks::registry::find_attack(attack_id)
                 .map(|attack| attack.name().to_string())
                 .unwrap_or_else(|| attack_id.to_string());
             display::print_section(&name);
         }
-        drop(current);
 
         match result.evaluation.label() {
             "REFUSED" => display::print_refused(&result.payload_name),
@@ -141,9 +150,14 @@ pub async fn run_attacks_and_display(
         max_tokens: 1024,
     };
 
-    if let Some(variants_per_attack) = generated.filter(|count| *count > 0) {
+    let effective_generated_variants = generated
+        .filter(|count| *count > 0)
+        .map(|count| limit.map(|max| max.min(count)).unwrap_or(count))
+        .unwrap_or(0);
+
+    if effective_generated_variants > 0 {
         attack_config.generation = Some(generator::GenerationConfig::with_defaults(
-            variants_per_attack,
+            effective_generated_variants,
         ));
         attack_config.generator_provider = Some(
             providers::build_generation_provider(app_config, None).context(
@@ -153,7 +167,7 @@ pub async fn run_attacks_and_display(
     }
     attack_config.scenario = scenario.clone();
 
-    let session = runner
+    let mut session = runner
         .run_session(
             &selected,
             provider,
@@ -167,7 +181,7 @@ pub async fn run_attacks_and_display(
                 retry_max_attempts: app_config.request.retry_max_attempts,
                 retry_base_delay_ms: app_config.request.retry_base_delay.as_millis() as u64,
                 retry_max_delay_ms: app_config.request.retry_max_delay.as_millis() as u64,
-                generated_variants_per_attack: generated.unwrap_or(0),
+                generated_variants_per_attack: effective_generated_variants,
                 generator_provider: attack_config
                     .generator_provider
                     .as_ref()
@@ -188,7 +202,6 @@ pub async fn run_attacks_and_display(
 
     if let Some(scenario) = scenario {
         let definition = app_scenarios::loader::load_scenario(&scenario)?;
-        let mut session = session;
         session.scenario.scenario_id = Some(definition.manifest.id.clone());
         session.scenario.scenario_name = Some(definition.manifest.name.clone());
         session.scenario.scenario_type = Some(definition.manifest.scenario_type.clone());
@@ -320,9 +333,7 @@ pub async fn run_command(
                 .iter()
                 .any(|selected_attack| selected_attack.id() == "sensitive_data_exposure");
             if includes_sensitive_data_exposure && app_scenario.is_none() {
-                anyhow::bail!(
-                    "--app-scenario is required when running sensitive_data_exposure"
-                );
+                anyhow::bail!("--app-scenario is required when running sensitive_data_exposure");
             }
 
             let scenario = scenarios::build_scenario_config(
