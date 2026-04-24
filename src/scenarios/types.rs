@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScenarioManifest {
@@ -139,6 +140,8 @@ pub struct ScenarioRunConfig {
     pub scenario_config_path: Option<PathBuf>,
     pub tenant: Option<String>,
     pub session_seed: Option<String>,
+    #[serde(skip)]
+    pub loaded_definition: Option<Arc<ScenarioDefinition>>,
 }
 
 #[derive(Debug, Clone)]
@@ -146,6 +149,46 @@ pub struct ScenarioEnvelope {
     pub system_prompt: String,
     pub retrieved_documents: Vec<ScenarioAsset>,
     pub user_prompt: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistedScenarioEnvelope {
+    pub payload_id: String,
+    pub payload_name: String,
+    pub payload_prompt: String,
+    pub system_prompt: String,
+    pub user_prompt: String,
+    #[serde(default)]
+    pub retrieved_documents: Vec<ScenarioAsset>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistedScenarioMetaEnvelope {
+    pub payload_id: String,
+    pub payload_name: String,
+    pub scenario_id: String,
+    pub scenario_name: String,
+    pub context_mode: String,
+    pub retrieval_mode: String,
+    pub retrieval_enabled: bool,
+    pub top_n: Option<usize>,
+    pub memory_enabled: bool,
+    pub prompt_placement: String,
+    pub hidden_context_policy: String,
+    pub mask_pii: bool,
+    pub include_secret_store: bool,
+    #[serde(default)]
+    pub defense_profile: Option<String>,
+    #[serde(default)]
+    pub tenant: Option<String>,
+    #[serde(default)]
+    pub session_seed: Option<String>,
+    #[serde(default)]
+    pub session_seed_applied: bool,
+    #[serde(default)]
+    pub hidden_asset_sources: Vec<String>,
+    #[serde(default)]
+    pub retrieved_document_sources: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

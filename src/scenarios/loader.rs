@@ -5,6 +5,7 @@ use crate::scenarios::types::{
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub fn load_scenario(config: &ScenarioRunConfig) -> Result<ScenarioDefinition> {
     let scenario_root = config.fixture_root.join(&config.scenario_id);
@@ -26,35 +27,53 @@ pub fn load_scenario(config: &ScenarioRunConfig) -> Result<ScenarioDefinition> {
     let mut retrieval_assets = Vec::new();
     let mut sensitive_values = Vec::new();
 
-    for entry in std::fs::read_dir(&scenario_root)
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(&scenario_root)
         .with_context(|| format!("Failed to read {}", scenario_root.display()))?
-    {
-        let entry = entry?;
-        let path = entry.path();
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .collect();
+    entries.sort();
+
+    for path in entries {
         if path.is_dir() {
             if path.file_name().and_then(|v| v.to_str()) == Some("kb") {
                 let kb_assets = load_directory_assets(&path, "retrieved_document")?;
                 for asset in &kb_assets {
-                    sensitive_values.extend(extract_sensitive_values(asset, &manifest.sensitivity.pii_fields));
+                    sensitive_values.extend(extract_sensitive_values(
+                        asset,
+                        &manifest.sensitivity.pii_fields,
+                    ));
                 }
                 retrieval_assets.extend(kb_assets);
             }
             continue;
         }
 
-        let file_name = path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
-        if matches!(file_name, "scenario.toml" | "system_prompt.txt" | "secrets.toml") {
+        let file_name = path
+            .file_name()
+            .and_then(|v| v.to_str())
+            .unwrap_or_default();
+        if matches!(
+            file_name,
+            "scenario.toml" | "system_prompt.txt" | "secrets.toml"
+        ) {
             continue;
         }
 
-        let kind = match path.extension().and_then(|ext| ext.to_str()).unwrap_or_default() {
+        let kind = match path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or_default()
+        {
             "csv" => "table",
             "json" => "record_set",
             "md" => "note",
             _ => "asset",
         };
         let asset = load_asset(&path, kind)?;
-        sensitive_values.extend(extract_sensitive_values(&asset, &manifest.sensitivity.pii_fields));
+        sensitive_values.extend(extract_sensitive_values(
+            &asset,
+            &manifest.sensitivity.pii_fields,
+        ));
         hidden_assets.push(asset);
     }
 
@@ -81,6 +100,14 @@ pub fn load_scenario(config: &ScenarioRunConfig) -> Result<ScenarioDefinition> {
         canaries,
         sensitive_values,
     })
+}
+
+pub fn resolve_scenario_definition(config: &ScenarioRunConfig) -> Result<Arc<ScenarioDefinition>> {
+    if let Some(definition) = &config.loaded_definition {
+        return Ok(Arc::clone(definition));
+    }
+
+    Ok(Arc::new(load_scenario(config)?))
 }
 
 fn load_canaries(root: &Path, files: &[String]) -> Result<Vec<CanaryDefinition>> {
@@ -180,7 +207,11 @@ fn extract_from_json(content: &str, pii_fields: &[String]) -> Vec<SensitiveValue
     values
 }
 
-fn collect_json_sensitive_values(value: &Value, pii_fields: &[String], values: &mut Vec<SensitiveValue>) {
+fn collect_json_sensitive_values(
+    value: &Value,
+    pii_fields: &[String],
+    values: &mut Vec<SensitiveValue>,
+) {
     match value {
         Value::Object(map) => {
             for (key, nested) in map {
@@ -218,6 +249,7 @@ mod tests {
             scenario_config_path: None,
             tenant: None,
             session_seed: Some("demo".to_string()),
+            loaded_definition: None,
         })
         .unwrap();
 

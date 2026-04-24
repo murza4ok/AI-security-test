@@ -2,9 +2,7 @@ use super::{Attack, AttackConfig, AttackResult, ResourceLink};
 use crate::payloads::loader::{Payload, PayloadLoader};
 use crate::providers::traits::LLMProvider;
 use crate::scenarios::{
-    builder::build_envelope,
-    evaluator::SensitiveDataEvaluator,
-    loader::load_scenario,
+    builder::build_envelope, evaluator::SensitiveDataEvaluator, loader::resolve_scenario_definition,
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -79,7 +77,7 @@ still demonstrates a real architectural failure pattern."#
             .scenario
             .as_ref()
             .context("sensitive_data_exposure requires --app-scenario")?;
-        let definition = Arc::new(load_scenario(scenario_config)?);
+        let definition = resolve_scenario_definition(scenario_config)?;
         let semaphore = Arc::new(Semaphore::new(config.concurrency));
 
         let mut futs: futures::stream::FuturesUnordered<_> = payloads
@@ -110,35 +108,34 @@ still demonstrates a real architectural failure pattern."#
                         model_used,
                         evidence,
                         damage,
-                    ) =
-                        match response {
-                            Ok(response) => {
-                                let latency_ms = start.elapsed().as_millis() as u64;
-                                let tokens_used = response
-                                    .completion_tokens
-                                        .map(|completion| response.prompt_tokens.unwrap_or(0) + completion);
-                                let (evaluation, evidence, damage) =
-                                    evaluator.evaluate(&response, payload, &definition, &envelope);
-                                (
-                                    response.text,
-                                    latency_ms,
-                                    tokens_used,
-                                    evaluation,
-                                    Some(response.model),
-                                    evidence,
-                                    damage,
-                                )
-                            }
-                            Err(error) => (
-                                format!("ERROR: {}", error),
-                                start.elapsed().as_millis() as u64,
-                                None,
-                                crate::engine::evaluator::EvaluationResult::Inconclusive,
-                                None,
-                                crate::engine::damage::AttackEvidence::default(),
-                                crate::engine::damage::DamageAssessment::default(),
-                            ),
-                        };
+                    ) = match response {
+                        Ok(response) => {
+                            let latency_ms = start.elapsed().as_millis() as u64;
+                            let tokens_used = response
+                                .completion_tokens
+                                .map(|completion| response.prompt_tokens.unwrap_or(0) + completion);
+                            let (evaluation, evidence, damage) =
+                                evaluator.evaluate(&response, payload, &definition, &envelope);
+                            (
+                                response.text,
+                                latency_ms,
+                                tokens_used,
+                                evaluation,
+                                Some(response.model),
+                                evidence,
+                                damage,
+                            )
+                        }
+                        Err(error) => (
+                            format!("ERROR: {}", error),
+                            start.elapsed().as_millis() as u64,
+                            None,
+                            crate::engine::evaluator::EvaluationResult::Inconclusive,
+                            None,
+                            crate::engine::damage::AttackEvidence::default(),
+                            crate::engine::damage::DamageAssessment::default(),
+                        ),
+                    };
 
                     let result = AttackResult {
                         payload_id: payload.id.clone(),

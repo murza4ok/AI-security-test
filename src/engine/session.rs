@@ -4,6 +4,7 @@
 //! Sessions can be serialised to JSON for post-analysis.
 
 use crate::attacks::AttackResult;
+use crate::scenarios::types::{PersistedScenarioEnvelope, PersistedScenarioMetaEnvelope};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -24,9 +25,27 @@ pub struct ScenarioMetadata {
     #[serde(default)]
     pub defense_profile: Option<String>,
     #[serde(default)]
+    pub context_mode: Option<String>,
+    #[serde(default)]
+    pub retrieval_mode: Option<String>,
+    #[serde(default)]
+    pub tenant: Option<String>,
+    #[serde(default)]
+    pub session_seed: Option<String>,
+    #[serde(default)]
+    pub session_seed_status: Option<String>,
+    #[serde(default)]
+    pub active_schema_fields: Vec<String>,
+    #[serde(default)]
+    pub report_only_schema_fields: Vec<String>,
+    #[serde(default)]
     pub sensitive_assets_count: usize,
     #[serde(default)]
     pub canary_count: usize,
+    #[serde(default)]
+    pub real_envelopes: Vec<PersistedScenarioEnvelope>,
+    #[serde(default)]
+    pub meta_envelopes: Vec<PersistedScenarioMetaEnvelope>,
     #[serde(default)]
     pub leaked_canaries: Vec<String>,
     #[serde(default)]
@@ -73,7 +92,11 @@ impl AttackRun {
         for result in &mut self.results {
             result.refresh_evaluation_metadata();
         }
-        self.generated_payloads = self.results.iter().filter(|result| result.generated).count();
+        self.generated_payloads = self
+            .results
+            .iter()
+            .filter(|result| result.generated)
+            .count();
         self.scoreable_payloads = self
             .payloads_tested
             .saturating_sub(self.informational_count + self.review_only_count);
@@ -83,7 +106,6 @@ impl AttackRun {
             (self.success_count as f32 / self.scoreable_payloads as f32) * 100.0
         };
     }
-
 }
 
 /// Top-level aggregate statistics across all attack runs in a session.
@@ -116,7 +138,6 @@ impl SessionSummary {
             (self.total_success as f32 / self.total_scoreable_payloads as f32) * 100.0
         };
     }
-
 }
 
 /// Snapshot of the runtime settings used for a session.

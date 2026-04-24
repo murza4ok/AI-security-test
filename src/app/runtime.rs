@@ -201,15 +201,49 @@ pub async fn run_attacks_and_display(
         .await?;
 
     if let Some(scenario) = scenario {
-        let definition = app_scenarios::loader::load_scenario(&scenario)?;
+        let definition = app_scenarios::loader::resolve_scenario_definition(&scenario)?;
         session.scenario.scenario_id = Some(definition.manifest.id.clone());
         session.scenario.scenario_name = Some(definition.manifest.name.clone());
         session.scenario.scenario_type = Some(definition.manifest.scenario_type.clone());
         session.scenario.scenario_version = Some(definition.manifest.version.clone());
         session.scenario.defense_profile = definition.manifest.defense_profile.clone();
+        session.scenario.context_mode = Some(definition.manifest.context.mode.clone());
+        session.scenario.retrieval_mode = Some(match scenario.retrieval_mode {
+            app_scenarios::types::RetrievalMode::Full => "full".to_string(),
+            app_scenarios::types::RetrievalMode::Subset => "subset".to_string(),
+        });
+        session.scenario.tenant = scenario.tenant.clone();
+        session.scenario.session_seed = scenario.session_seed.clone();
+        session.scenario.session_seed_status = Some(app_scenarios::builder::session_seed_status(
+            definition.as_ref(),
+            &scenario,
+        ));
+        session.scenario.active_schema_fields = app_scenarios::builder::active_schema_fields();
+        session.scenario.report_only_schema_fields =
+            app_scenarios::builder::report_only_schema_fields();
         session.scenario.sensitive_assets_count =
             definition.hidden_assets.len() + definition.retrieval_assets.len();
         session.scenario.canary_count = definition.canaries.len();
+        let mut real_envelopes = Vec::new();
+        let mut meta_envelopes = Vec::new();
+        for run in &session.attacks_run {
+            if run.attack_id != "sensitive_data_exposure" {
+                continue;
+            }
+            for result in &run.results {
+                let (real_envelope, meta_envelope) = app_scenarios::builder::build_report_envelopes(
+                    definition.as_ref(),
+                    &scenario,
+                    &result.payload_id,
+                    &result.payload_name,
+                    &result.prompt_sent,
+                );
+                real_envelopes.push(real_envelope);
+                meta_envelopes.push(meta_envelope);
+            }
+        }
+        session.scenario.real_envelopes = real_envelopes;
+        session.scenario.meta_envelopes = meta_envelopes;
         reporting::terminal_report::print_session_summary(&session);
         return Ok(Some(session));
     }
