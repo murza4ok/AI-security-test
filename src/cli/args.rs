@@ -37,7 +37,7 @@ pub enum Commands {
         #[arg(short, long, required = true)]
         attack: Vec<String>,
 
-        /// Override имени модели для этого запуска
+        /// Override имени модели для этого запуска; при нескольких провайдерах требует --provider
         #[arg(short, long)]
         model: Option<String>,
 

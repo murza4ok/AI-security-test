@@ -399,7 +399,7 @@ cargo run --bin ai-sec -- help run
 
 - `--attack <id>` — одна или несколько категорий атак;
 - `--provider <id>` — `openai`, `anthropic`, `ollama`, `deepseek`, `yandexgpt`;
-- `--model <name>` — override модели для конкретного запуска;
+- `--model <name>` — override модели для конкретного запуска; если настроено несколько провайдеров, используйте вместе с `--provider`;
 - `--limit <N>` — ограничение числа payload-ов;
 - `--generated <N>` — генерация дополнительных payload-вариантов;
 - `--output <path>` — сохранить отчет в конкретный JSON-файл при запуске через один провайдер;
