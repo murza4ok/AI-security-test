@@ -5,8 +5,15 @@
 ## Current Continuation Point
 
 - integration branch: `codex/weekend-integration`
-- current next branch to start: `codex/ai-sec-dx-and-launch`
-- current next task-pack: `development/branches/02-ai-sec-dx-and-launch/task.md`
+- current wave: `Wave 2`
+- branches allowed to start now:
+  - `codex/ai-sec-runtime-determinism`
+  - `codex/provider-contract-refactor`
+  - `codex/web-target-structure`
+- task-packs to use now:
+  - `development/branches/03-ai-sec-runtime-determinism/task.md`
+  - `development/branches/04-provider-contract-refactor/task.md`
+  - `development/branches/06-web-target-structure/task.md`
 - prompts location: `prompts.md`
 
 ## Completed Stages
@@ -62,9 +69,45 @@ Residual note:
 - `cargo run --bin web_target -- --help` не является help-path для текущего `web_target`;
 - допустимая проверка для этой ветки была закрыта через `cargo check --all-targets`.
 
+### 02. AI-Sec DX And Launch
+
+Статус:
+- completed
+- reviewed
+- merged into `codex/weekend-integration`
+
+Feature branch:
+- `codex/ai-sec-dx-and-launch`
+
+Feature commit:
+- `e45a6fb`
+
+Integration merge:
+- `e45a6fb`
+
+Что сделано:
+- help, usage и after-help синхронизированы с поддерживаемым запуском `cargo run --bin ai-sec -- ...`;
+- README приведён к фактическому CLI-контракту `ai-sec`;
+- интерактивный режим больше не падает целиком без настроенного провайдера;
+- без настроенного провайдера attack-run пункты скрываются, а review/sessions/explain остаются доступны;
+- `--output` документирован честно как single-provider path.
+
+Проверки:
+- `cargo check --all-targets`
+- `cargo run --bin ai-sec -- --help`
+- `cargo run --bin ai-sec -- list`
+- `cargo run --bin ai-sec -- help run`
+- ручной smoke-check интерактивного режима без настроенного провайдера
+
+Reviewer verdict:
+- ready for merge
+
+Residual note:
+- live smoke запуска атак из интерактивного меню с реально настроенным провайдером не выполнялся в этом окружении;
+- pre-existing warning про `display_name` в `web_target` остаётся вне scope ветки.
+
 ## Not Started Yet
 
-- `02-ai-sec-dx-and-launch`
 - `03-ai-sec-runtime-determinism`
 - `04-provider-contract-refactor`
 - `05-scenario-contract`
@@ -79,7 +122,7 @@ Residual note:
 
 1. Открой `development/STATUS.md`.
 2. Убедись, что текущая база — `codex/weekend-integration`.
-3. Не запускай повторно `01-runtime-boundary-contract`: он уже выполнен и влит в integration branch.
-4. Создай следующую feature-ветку `codex/ai-sec-dx-and-launch` от `codex/weekend-integration`.
-5. Используй промпт из `prompts.md` для `development/branches/02-ai-sec-dx-and-launch/task.md`.
-6. После завершения ветки обнови этот файл новым completed block и следующим continuation point.
+3. Не запускай повторно `01-runtime-boundary-contract` и `02-ai-sec-dx-and-launch`: они уже выполнены и влиты в integration branch.
+4. Для `Wave 2` можно стартовать параллельно `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor` и `06-web-target-structure`.
+5. Используй соответствующие `development/branches/*/task.md` и соблюдай их allowed scope.
+6. После завершения и merge веток `03`, `04` и `06` обнови этот файл перед переходом к `05-scenario-contract`.
