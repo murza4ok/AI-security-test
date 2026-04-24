@@ -33,6 +33,34 @@
 
 Эта README в первую очередь описывает запуск и поведение `ai-sec`. `web_target` рассматривается как отдельная цель, которую нужно поднимать самостоятельным процессом.
 
+## web_target Quick Smoke
+
+Для локального demo и ручной проверки web-контура:
+
+```bash
+cargo run --bin web_target --
+```
+
+После запуска доступны:
+
+- `http://127.0.0.1:3000/health`
+- `http://127.0.0.1:3000/login`
+- `http://127.0.0.1:3000/chat` после логина
+- `http://127.0.0.1:3000/api/chat` как session-backed JSON endpoint
+
+Demo identities:
+
+- `guest`
+- `customer_alice`
+- `customer_bob`
+- `agent_support`
+
+Security profiles:
+
+- `naive`
+- `segmented`
+- `guarded`
+
 ## Карта документации
 
 Живая документация проекта разделена так:

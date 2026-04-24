@@ -29,7 +29,10 @@ pub fn session_from_headers(headers: &HeaderMap) -> Option<UserSession> {
     None
 }
 
-pub fn set_session_cookie(headers: &mut HeaderMap, session: &UserSession) -> Result<(), axum::http::header::InvalidHeaderValue> {
+pub fn set_session_cookie(
+    headers: &mut HeaderMap,
+    session: &UserSession,
+) -> Result<(), axum::http::header::InvalidHeaderValue> {
     let cookie = format!(
         "{}={}|{}; Path=/; HttpOnly; SameSite=Lax",
         COOKIE_NAME,

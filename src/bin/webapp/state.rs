@@ -100,13 +100,26 @@ pub struct TranscriptTurn {
     pub assistant_message: String,
 }
 
-pub struct AppState {
-    users: Vec<UserRecord>,
+#[derive(Debug, Clone, Deserialize)]
+pub struct SupportConfig {
+    pub queue: String,
+    pub crm_snapshot: String,
+    pub crm_table: String,
+}
+
+#[derive(Debug, Clone)]
+struct SupportDataset {
+    support_config: SupportConfig,
     customers: Vec<CustomerRecord>,
     tickets: Vec<TicketRecord>,
     internal_notes: String,
     system_prompt: String,
     hardened_system_prompt: String,
+}
+
+pub struct AppState {
+    users: Vec<UserRecord>,
+    dataset: SupportDataset,
     transcripts: Mutex<HashMap<String, Vec<TranscriptTurn>>>,
 }
 
@@ -115,22 +128,26 @@ impl AppState {
         let fixture_dir = PathBuf::from("fixtures/sensitive_data_exposure/support_bot");
         let hardened_dir = PathBuf::from("fixtures/sensitive_data_exposure/support_bot_hardened");
 
+        let support_config = load_support_config(&fixture_dir.join("support_config.toml"))?;
         let customers = load_customers(&fixture_dir.join("customers.csv"))?;
         let tickets = load_tickets(&fixture_dir.join("tickets.json"))?;
-        let internal_notes =
-            fs::read_to_string(fixture_dir.join("support_notes.md")).context("failed to read notes")?;
-        let system_prompt =
-            fs::read_to_string(fixture_dir.join("system_prompt.txt")).context("failed to read system prompt")?;
+        let internal_notes = fs::read_to_string(fixture_dir.join("support_notes.md"))
+            .context("failed to read notes")?;
+        let system_prompt = fs::read_to_string(fixture_dir.join("system_prompt.txt"))
+            .context("failed to read system prompt")?;
         let hardened_system_prompt = fs::read_to_string(hardened_dir.join("system_prompt.txt"))
             .context("failed to read hardened system prompt")?;
 
         Ok(Self {
             users: demo_users(),
-            customers,
-            tickets,
-            internal_notes,
-            system_prompt,
-            hardened_system_prompt,
+            dataset: SupportDataset {
+                support_config,
+                customers,
+                tickets,
+                internal_notes,
+                system_prompt,
+                hardened_system_prompt,
+            },
             transcripts: Mutex::new(HashMap::new()),
         })
     }
@@ -164,33 +181,43 @@ impl AppState {
     }
 
     pub fn all_customers(&self) -> &[CustomerRecord] {
-        &self.customers
+        &self.dataset.customers
     }
 
     pub fn customer_by_id(&self, customer_id: &str) -> Option<&CustomerRecord> {
-        self.customers.iter().find(|record| record.customer_id == customer_id)
+        self.dataset
+            .customers
+            .iter()
+            .find(|record| record.customer_id == customer_id)
     }
 
     pub fn ticket_by_customer(&self, customer_id: &str) -> Vec<&TicketRecord> {
-        self.tickets
+        self.dataset
+            .tickets
             .iter()
             .filter(|ticket| ticket.customer_id == customer_id)
             .collect()
     }
 
     pub fn all_tickets(&self) -> &[TicketRecord] {
-        &self.tickets
+        &self.dataset.tickets
     }
 
     pub fn internal_notes(&self) -> &str {
-        &self.internal_notes
+        &self.dataset.internal_notes
     }
 
     pub fn system_prompt(&self, profile: SecurityProfile) -> &str {
         match profile {
-            SecurityProfile::Naive => &self.system_prompt,
-            SecurityProfile::Segmented | SecurityProfile::Guarded => &self.hardened_system_prompt,
+            SecurityProfile::Naive => &self.dataset.system_prompt,
+            SecurityProfile::Segmented | SecurityProfile::Guarded => {
+                &self.dataset.hardened_system_prompt
+            }
         }
+    }
+
+    pub fn support_config(&self) -> &SupportConfig {
+        &self.dataset.support_config
     }
 }
 
@@ -231,8 +258,17 @@ fn demo_users() -> Vec<UserRecord> {
     ]
 }
 
+fn load_support_config(path: &Path) -> anyhow::Result<SupportConfig> {
+    let raw =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let config =
+        toml::from_str(&raw).with_context(|| format!("failed to parse {}", path.display()))?;
+    Ok(config)
+}
+
 fn load_customers(path: &Path) -> anyhow::Result<Vec<CustomerRecord>> {
-    let mut reader = csv::Reader::from_path(path).with_context(|| format!("failed to open {}", path.display()))?;
+    let mut reader = csv::Reader::from_path(path)
+        .with_context(|| format!("failed to open {}", path.display()))?;
     let mut customers = Vec::new();
     for row in reader.records() {
         let row = row?;
@@ -250,7 +286,9 @@ fn load_customers(path: &Path) -> anyhow::Result<Vec<CustomerRecord>> {
 }
 
 fn load_tickets(path: &Path) -> anyhow::Result<Vec<TicketRecord>> {
-    let raw = fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
-    let tickets = serde_json::from_str(&raw).with_context(|| format!("failed to parse {}", path.display()))?;
+    let raw =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let tickets = serde_json::from_str(&raw)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
     Ok(tickets)
 }

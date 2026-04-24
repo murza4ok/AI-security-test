@@ -2,7 +2,12 @@ use crate::webapp::state::{SecurityProfile, TranscriptTurn, UserRecord};
 
 pub fn render_login_page(users: &[UserRecord], error: Option<&str>) -> String {
     let error_html = error
-        .map(|value| format!(r#"<p class="banner error">Login error: {}</p>"#, escape_html(value)))
+        .map(|value| {
+            format!(
+                r#"<p class="banner error">Login error: {}</p>"#,
+                escape_html(value)
+            )
+        })
         .unwrap_or_default();
 
     let mut user_options = String::new();
@@ -173,7 +178,12 @@ pub fn render_chat_page(
     error: Option<&str>,
 ) -> String {
     let error_html = error
-        .map(|value| format!(r#"<p class="banner error">Chat error: {}</p>"#, escape_html(value)))
+        .map(|value| {
+            format!(
+                r#"<p class="banner error">Chat error: {}</p>"#,
+                escape_html(value)
+            )
+        })
         .unwrap_or_default();
 
     let mut transcript_html = String::new();
@@ -361,6 +371,7 @@ pub fn render_chat_page(
         <p>Simple HTTP target for `ai-sec`. The UI is intentionally small; the useful surface is the backend policy split.</p>
       </div>
       <div class="badges">
+        <span class="badge">display: {display_name}</span>
         <span class="badge">user: {username}</span>
         <span class="badge">role: {role}</span>
         <span class="badge">profile: {profile}</span>
@@ -385,6 +396,7 @@ pub fn render_chat_page(
   </main>
 </body>
 </html>"#,
+        display_name = escape_html(&user.display_name),
         username = escape_html(&user.username),
         role = escape_html(user.role.as_str()),
         profile = escape_html(profile.as_str()),

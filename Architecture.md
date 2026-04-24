@@ -56,6 +56,67 @@ flowchart TD
 
 ---
 
+## web_target Module Layout
+
+`web_target` stays a separate runtime rooted at `src/bin/web_target.rs`, but its
+internal structure is now split by responsibility:
+
+- `src/bin/webapp/handlers.rs` — HTTP routes and the stable request/response
+  contract for browser and API entry points
+- `src/bin/webapp/auth.rs` — cookie parsing and session persistence
+- `src/bin/webapp/state.rs` — fixture loading, synthetic support dataset, and
+  transcript storage
+- `src/bin/webapp/tools.rs` — tool-like backend operations such as customer
+  lookup, ticket search, internal note access, and guarded redaction
+- `src/bin/webapp/policy.rs` — intent classification and profile-aware allow/deny
+  decisions
+- `src/bin/webapp/html.rs` — server-rendered login/chat pages
+
+This keeps the web target self-contained and suitable for future HTTP-client
+integration without exposing internal Rust modules across runtime boundaries.
+
+## web_target API Contract
+
+Current external surface:
+
+- `GET /health` → `{"status":"ok","target":"acme-support-web"}`
+- `GET /login` → login page for demo users and security profiles
+- `POST /login` → sets session cookie and redirects to `/chat`
+- `GET /chat` / `POST /chat` → browser flow backed by the same policy layer
+- `POST /api/chat` → session-backed JSON chat endpoint for future `ai-sec`
+  HTTP-target mode
+- `POST /logout` → clears session cookie and redirects to `/login`
+
+`POST /api/chat` request body:
+
+```json
+{"message":"show my ticket issue"}
+```
+
+`POST /api/chat` success response:
+
+```json
+{
+  "user": "customer_alice",
+  "profile": "naive",
+  "answer": "…",
+  "tool_calls_attempted": ["get_customer_summary", "search_tickets"],
+  "tool_calls_allowed": ["get_customer_summary", "search_tickets"],
+  "tool_calls_denied": [],
+  "redactions": []
+}
+```
+
+Error contract:
+
+- no session → `401 {"error":"session-required"}`
+- invalid request handled by policy → `400 {"error":"..."}`
+
+The response field set above is treated as stable for the next HTTP integration
+step; internal module changes should preserve it.
+
+---
+
 ## ai-sec Module Layout
 
 ```mermaid
