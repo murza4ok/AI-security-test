@@ -5,15 +5,9 @@
 ## Current Continuation Point
 
 - integration branch: `codex/weekend-integration`
-- current wave: `Wave 2`
-- completed in current wave:
-  - `codex/web-target-structure`
-- blocked before `Wave 3`:
-  - `codex/ai-sec-runtime-determinism`
-  - `codex/provider-contract-refactor`
-- next work before `05-scenario-contract`:
-  - resolve remaining report/metadata contract in `03-ai-sec-runtime-determinism`
-  - resolve provider-contract scope/diagnostic issues in `04-provider-contract-refactor`
+- current next branch to start: `codex/scenario-contract`
+- current next task-pack: `development/branches/05-scenario-contract/task.md`
+- current wave to continue: `Wave 3`
 - prompts location: `prompts.md`
 
 ## Completed Stages
@@ -146,48 +140,77 @@ Residual note:
 - route-level automated tests for `/api/chat` success/`401`/`400` are still absent;
 - live smoke был подтверждён на path `customer_alice + naive`, остальные профили не прогонялись в этой ветке.
 
-## In Progress / Blocked
-
 ### 03. AI-Sec Runtime Determinism
 
 Статус:
-- implementation present on feature branch
-- not ready for merge
+- completed
+- reviewed
+- merged into `codex/weekend-integration`
 
 Feature branch:
 - `codex/ai-sec-runtime-determinism`
 
-Текущее состояние:
-- deterministic payload loading, stable file order and honest `--limit` logic реализованы;
-- `cargo check --offline --all-targets` и `cargo test --offline` проходят;
-- smoke-check через local `ollama` подтвердил стабильный persisted payload order в saved JSON reports;
-- reviewer всё ещё считает не до конца закрытой честную семантику session-level generation metadata для mixed multi-attack runs.
+Feature commit:
+- `c705ce6`
 
-Блокер:
-- нужно договориться и зафиксировать, что именно должен означать `session.config.generated_variants_per_attack`:
-  - configured cap after normalization;
-  - или фактически выполненное generated count;
-  - или поле должно быть заменено/дополнено другим contract layer.
+Integration merge:
+- `95f9195`
+
+Что сделано:
+- deterministic payload loading, stable file order and honest `--limit` logic реализованы;
+- stable seed selection for generated mode зафиксирован без случайного выбора;
+- `session.config.generated_variants_per_attack` закреплён как normalized configured target per attack;
+- фактическое число выполненных generated payload-ов остаётся source of truth на уровне `attacks_run[].generated_payloads` и `summary.total_generated_payloads`;
+- panic-path в runtime display callback убран.
+
+Проверки:
+- `cargo check --offline --all-targets`
+- `cargo test --offline`
+- `env OLLAMA_BASE_URL=http://127.0.0.1:11434 OLLAMA_MODEL=qwen2.5:0.5b cargo run --offline --bin ai-sec -- check --provider ollama`
+- два последовательных saved JSON reports с одинаковым persisted payload order
+- reviewer verdict: merge-ready
+
+Residual note:
+- детерминизм гарантирован на уровне persisted session/report order, а не порядка прихода stdout lines при конкурентном выполнении;
+- верификация generated/scenario behavior с полноценно отвечающим provider path в review была ограничена окружением.
 
 ### 04. Provider Contract Refactor
 
 Статус:
-- implementation present on feature branch
-- not ready for merge
+- completed
+- reviewed
+- merged into `codex/weekend-integration`
 
 Feature branch:
 - `codex/provider-contract-refactor`
 
-Текущее состояние:
-- единый provider factory path и shared OpenAI-compatible layer реализованы;
-- `cargo check --offline --all-targets` и `cargo test --offline` проходят;
-- найден reviewer finding по регрессии explicit `--provider` diagnostics внутри scope;
-- найден contract drift по `--model`, но его честное исправление уже упирается в help/docs вне allowed scope текущего task-pack.
+Feature commit:
+- `cf7c6b3`
 
-Блокер:
-- нужно либо:
-  - исправить только provider diagnostics в рамках текущего scope и отдельно решить docs/help;
-  - либо явно расширить scope ветки для честного завершения `--model` contract.
+Integration merge:
+- `3d52c53`
+
+Что сделано:
+- единый provider factory path и shared OpenAI-compatible layer реализованы;
+- explicit `--provider` path снова отдаёт provider-specific diagnostics;
+- `--model` теперь ведёт себя предсказуемо и безопасно:
+  - разрешён для single-provider runs;
+  - разрешён вместе с explicit `--provider`;
+  - отклоняется ранним guardrail при multi-provider config без `--provider`;
+- help/docs уточнены по `--model` в рамках пользовательского расширения scope;
+- общий OpenAI-compatible provider layer вынесен в `src/providers/openai_compatible.rs`.
+
+Проверки:
+- `cargo check --offline --all-targets`
+- `cargo test --offline`
+- `cargo run --offline --bin ai-sec -- check --provider ollama`
+- `cargo run --offline --bin ai-sec -- check --provider deepseek`
+- `env OPENAI_API_KEY=dummy OPENAI_MODEL=gpt-4o OLLAMA_MODEL=llama3 cargo run --offline --bin ai-sec -- run --attack jailbreaking --model gpt-4.1-mini --limit 1`
+- `env OLLAMA_BASE_URL=http://127.0.0.1:11434 OLLAMA_MODEL=qwen2.5:0.5b cargo run --offline --bin ai-sec -- check --provider ollama`
+- reviewer verdict: ready for merge
+
+Residual note:
+- пользователь явно разрешил расширение scope для уточнения help/docs по `--model`; это решение сохранено в task-pack `04`.
 
 ## Not Started Yet
 
@@ -202,7 +225,7 @@ Feature branch:
 
 1. Открой `development/STATUS.md`.
 2. Убедись, что текущая база — `codex/weekend-integration`.
-3. Не запускай повторно `01-runtime-boundary-contract` и `02-ai-sec-dx-and-launch`: они уже выполнены и влиты в integration branch.
-4. Не запускай повторно `06-web-target-structure`: он уже завершён и влит в integration branch.
-5. Сначала добей blockers веток `03-ai-sec-runtime-determinism` и `04-provider-contract-refactor`.
-6. Только после их честного завершения переходи к `05-scenario-contract`.
+3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor` и `06-web-target-structure`: они уже завершены и влиты в integration branch.
+4. Следующая рабочая ветка по плану: `codex/scenario-contract`.
+5. Используй task-pack `development/branches/05-scenario-contract/task.md`.
+6. После завершения `05` обнови этот файл перед переходом к `07-http-target-client`.
