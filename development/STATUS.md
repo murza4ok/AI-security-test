@@ -5,9 +5,9 @@
 ## Current Continuation Point
 
 - integration branch: `codex/weekend-integration`
-- current next branch to start: `codex/scenario-contract`
-- current next task-pack: `development/branches/05-scenario-contract/task.md`
-- current wave to continue: `Wave 3`
+- current next branch to start: `codex/http-target-client`
+- current next task-pack: `development/branches/07-http-target-client/task.md`
+- current wave to continue: `Wave 4`
 - prompts location: `prompts.md`
 
 ## Completed Stages
@@ -212,9 +212,46 @@ Integration merge:
 Residual note:
 - пользователь явно разрешил расширение scope для уточнения help/docs по `--model`; это решение сохранено в task-pack `04`.
 
+### 05. Scenario Contract
+
+Статус:
+- completed
+- merged into `codex/weekend-integration`
+
+Feature branch:
+- `codex/scenario-contract`
+
+Feature commit:
+- `91b7b78`
+
+Integration merge:
+- `91b7b78`
+
+Что сделано:
+- scenario definition теперь предзагружается в `ScenarioRunConfig`, а runtime/attack path используют cached definition вместо повторной загрузки с диска;
+- retrieval subset сохраняет детерминированный порядок и использует `session_seed` только как явный deterministic tie-break input;
+- `session_seed` зафиксирован честно: он влияет на session-memory marker и subset retrieval tie-breaks, а его итоговый статус сериализуется в report metadata;
+- в session report теперь сохраняются `real_envelopes` и `meta_envelopes` для scenario runs;
+- scenario schema разделён на runtime-active поля и report-only поля, и эта граница отражена и в JSON report metadata, и в docs;
+- `mask_pii` перестал быть ложным флагом и теперь действительно форсирует masked/summarized rendering hidden context.
+
+Проверки:
+- `cargo check --offline --all-targets`
+- `cargo test --offline`
+- `env OLLAMA_BASE_URL=http://127.0.0.1:11434 OLLAMA_MODEL=qwen2.5:0.5b cargo run --offline --bin ai-sec -- check --provider ollama`
+- ручной smoke-check `support_bot` с JSON report path
+- ручной smoke-check `hr_bot` с JSON report path
+- ручной smoke-check `internal_rag_bot` с JSON report path
+- повторный `internal_rag_bot` run с совпадающими `.scenario.real_envelopes` и `.scenario.meta_envelopes`
+
+Reviewer note:
+- reviewer-agent не вернул финальный verdict в срок; merge decision принята координатором на основе clean scope, passing tests и ручной верификации JSON envelope contract.
+
+Residual note:
+- в этом окружении scenario runs доходили до report path, но provider completion внутри `ai-sec run ... --provider ollama` завершался `Provider is not configured (missing API key or URL)` несмотря на успешный `check --provider ollama`; это выглядит как существующий provider/runtime path gap вне scope `05`, а не как поломка scenario contract.
+
 ## Not Started Yet
 
-- `05-scenario-contract`
 - `07-http-target-client`
 - `08-multi-turn-foundation`
 - `09-reporting-hardening`
@@ -225,7 +262,7 @@ Residual note:
 
 1. Открой `development/STATUS.md`.
 2. Убедись, что текущая база — `codex/weekend-integration`.
-3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor` и `06-web-target-structure`: они уже завершены и влиты в integration branch.
-4. Следующая рабочая ветка по плану: `codex/scenario-contract`.
-5. Используй task-pack `development/branches/05-scenario-contract/task.md`.
-6. После завершения `05` обнови этот файл перед переходом к `07-http-target-client`.
+3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor`, `05-scenario-contract` и `06-web-target-structure`: они уже завершены и влиты в integration branch.
+4. Следующая рабочая ветка по плану: `codex/http-target-client`.
+5. Используй task-pack `development/branches/07-http-target-client/task.md`.
+6. Перед стартом `07` учитывай residual note из `05`: scenario report contract уже стабилизирован, но provider completion path для local Ollama ещё требует отдельной проверки в рамках следующей волны только если это затронет HTTP mode.
