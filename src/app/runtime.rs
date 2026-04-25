@@ -1,4 +1,4 @@
-use crate::app::{providers, scenarios};
+use crate::app::{providers, scenarios, target};
 use crate::attacks;
 use crate::cli::display;
 use crate::config;
@@ -58,6 +58,7 @@ pub async fn run_all_providers(
     limit: Option<usize>,
     generated: Option<usize>,
     scenario: Option<app_scenarios::types::ScenarioRunConfig>,
+    target: Option<target::HttpTargetConfig>,
 ) -> Result<()> {
     for provider in providers_list {
         let session = run_attacks_and_display(
@@ -68,6 +69,7 @@ pub async fn run_all_providers(
             limit,
             generated,
             scenario.clone(),
+            target.clone(),
         )
         .await?;
 
@@ -88,6 +90,7 @@ pub async fn run_attacks_and_display(
     limit: Option<usize>,
     generated: Option<usize>,
     scenario: Option<app_scenarios::types::ScenarioRunConfig>,
+    target: Option<target::HttpTargetConfig>,
 ) -> Result<Option<engine::session::TestSession>> {
     if selected.is_empty() {
         println!("  No attacks to run.");
@@ -199,6 +202,17 @@ pub async fn run_attacks_and_display(
             on_result,
         )
         .await?;
+
+    if let Some(target_metadata) = provider.target_metadata() {
+        session.target = target_metadata;
+    } else if let Some(target) = target {
+        session.target.mode = Some("http".to_string());
+        session.target.base_url = Some(target.base_url);
+        session.target.endpoint = Some("/api/chat".to_string());
+        session.target.authenticated_user = Some(target.username);
+        session.target.security_profile = Some(target.profile);
+        session.target.session_persistence = Some("cookie".to_string());
+    }
 
     if let Some(scenario) = scenario {
         let definition = app_scenarios::loader::resolve_scenario_definition(&scenario)?;
@@ -340,12 +354,13 @@ pub async fn run_command(
             scenario_config,
             tenant,
             session_seed,
+            target_mode,
+            target_base_url,
+            target_user,
+            target_profile,
         } => {
             display::print_banner();
             display::print_disclaimer();
-
-            let providers_list =
-                providers::build_all_providers(&cli.provider, model.as_deref(), &app_config)?;
             let loader = payloads::loader::PayloadLoader::new("payloads");
 
             let selected: Vec<Arc<dyn attacks::Attack>> = attack
@@ -363,11 +378,38 @@ pub async fn run_command(
                 anyhow::bail!("No valid attack IDs. Use 'ai-sec list' to see available options.");
             }
 
+            let target = target::build_http_target_config(
+                target_mode.as_deref(),
+                target_base_url.as_deref(),
+                target_user.as_deref(),
+                target_profile.as_deref(),
+            )?;
+            if target.is_some() {
+                if cli.provider.is_some() {
+                    anyhow::bail!("HTTP target mode does not use --provider");
+                }
+                if model.is_some() {
+                    anyhow::bail!("HTTP target mode does not use --model");
+                }
+                if app_scenario.is_some()
+                    || fixture_root.is_some()
+                    || retrieval_mode.is_some()
+                    || scenario_config.is_some()
+                    || tenant.is_some()
+                    || session_seed.is_some()
+                {
+                    anyhow::bail!("HTTP target mode does not support scenario-specific flags");
+                }
+            }
+
             let includes_sensitive_data_exposure = selected
                 .iter()
                 .any(|selected_attack| selected_attack.id() == "sensitive_data_exposure");
-            if includes_sensitive_data_exposure && app_scenario.is_none() {
+            if includes_sensitive_data_exposure && target.is_none() && app_scenario.is_none() {
                 anyhow::bail!("--app-scenario is required when running sensitive_data_exposure");
+            }
+            if includes_sensitive_data_exposure && target.is_some() {
+                anyhow::bail!("sensitive_data_exposure is not supported in HTTP target mode");
             }
 
             let scenario = scenarios::build_scenario_config(
@@ -378,6 +420,25 @@ pub async fn run_command(
                 tenant.as_deref(),
                 session_seed.as_deref(),
             )?;
+
+            let providers_list: Vec<Arc<dyn LLMProvider>> =
+                if let Some(target_config) = target.as_ref() {
+                    vec![
+                        Arc::new(crate::providers::http_target::HttpTargetProvider::new(
+                            target_config.base_url.clone(),
+                            target_config.username.clone(),
+                            target_config.profile.clone(),
+                            app_config.request.timeout,
+                            crate::providers::RetrySettings {
+                                max_attempts: app_config.request.retry_max_attempts,
+                                base_delay: app_config.request.retry_base_delay,
+                                max_delay: app_config.request.retry_max_delay,
+                            },
+                        )) as Arc<dyn LLMProvider>,
+                    ]
+                } else {
+                    providers::build_all_providers(&cli.provider, model.as_deref(), &app_config)?
+                };
 
             if output.is_some() && providers_list.len() > 1 {
                 eprintln!(
@@ -395,6 +456,7 @@ pub async fn run_command(
                     limit,
                     generated,
                     scenario.clone(),
+                    target.clone(),
                 )
                 .await?;
 

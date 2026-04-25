@@ -71,6 +71,7 @@ Security profiles:
 - [Roadmap_weekend.md](Roadmap_weekend.md) — итоговый чек-лист выходной итерации.
 - [Branch_tasks.md](Branch_tasks.md) — разбиение roadmap на ветки разработки.
 - [docs/README.md](docs/README.md) — индекс активной документации в `docs/`.
+- [docs/HTTP_Target_Mode.md](docs/HTTP_Target_Mode.md) — контракт HTTP-режима для атаки `web_target`.
 - [refactoring.md](refactoring.md) — технический аудит текущих проблем и долга.
 
 ## Что умеет инструмент
@@ -277,7 +278,36 @@ cargo run --bin ai-sec -- run --attack token_attacks --provider ollama --limit 3
 - для smoke-тестов guardrails;
 - для воспроизводимых прогонов по фиксированному корпусу payload-ов.
 
-### 3. Генеративный режим
+### 3. HTTP target mode
+
+Этот режим атакует `web_target` как отдельное web-приложение через внешний HTTP-контракт, без прямого доступа к внутренним Rust-модулям.
+
+Базовый пример:
+
+```bash
+cargo run --bin ai-sec -- run \
+  --attack prompt_injection \
+  --target-mode http \
+  --target-base-url http://127.0.0.1:3000 \
+  --target-user customer_alice \
+  --target-profile naive
+```
+
+Что делает клиент:
+
+- логинится через `POST /login`;
+- сохраняет session cookie на весь run;
+- отправляет payload-ы в `POST /api/chat`;
+- записывает в JSON report target metadata: base URL, endpoint, user, profile, request count, tool calls и redactions.
+
+Ограничения:
+
+- HTTP mode рассчитан на classic payload-driven категории;
+- `sensitive_data_exposure` в этом режиме не поддерживается;
+- `--provider` и `--model` здесь не используются;
+- scenario-specific флаги в HTTP mode запрещены.
+
+### 4. Генеративный режим
 
 Если указать `--generated N`, `ai-sec` сначала берет существующие payload-ы как seed-ы, затем через DeepSeek генерирует до `N` новых вариантов того же attack family.
 
@@ -303,7 +333,7 @@ cargo run --bin ai-sec -- run --attack prompt_injection --provider deepseek --ge
 - если нужно проверить устойчивость к вариациям формулировок;
 - если вы готовите материал для исследования bypass rate не только на hand-written payload-ах.
 
-### 4. Scenario-driven режим: `sensitive_data_exposure`
+### 5. Scenario-driven режим: `sensitive_data_exposure`
 
 Это специальная attack family, которая не просто шлет prompt в модель, а сначала собирает synthetic app-context из fixtures.
 
@@ -366,7 +396,7 @@ cargo run --bin ai-sec -- run \
 - `internal_rag_bot` моделирует retrieval-driven ассистента с rule-based document selection;
 - `support_bot_hardened` показывает более защищенный вариант с `prompt_placement = "user_context"` и `hidden_context_policy = "sanitized"`.
 
-### 5. Обучающий режим
+### 6. Обучающий режим
 
 Показывает explainer по attack category: что это за техника, зачем она нужна и какие материалы почитать.
 
@@ -379,7 +409,7 @@ cargo run --bin ai-sec -- explain jailbreaking
 - для workshop-режима;
 - для быстрого refresher-а по attack family.
 
-### 6. Проверка конфигурации провайдеров
+### 7. Проверка конфигурации провайдеров
 
 Проверяет только те провайдеры, которые настроены в `.env`, либо конкретный провайдер через `--provider`.
 
@@ -390,7 +420,7 @@ cargo run --bin ai-sec -- check --provider ollama
 
 Для `ollama` health check проверяет не только доступность демона, но и наличие настроенной модели. Если получили `model not found`, исправьте `OLLAMA_MODEL` в `.env` или передайте валидную модель через `--model` при запуске атаки.
 
-### 7. Режимы анализа результатов
+### 8. Режимы анализа результатов
 
 Каждый `run` сохраняет JSON-отчет в `results/`.
 

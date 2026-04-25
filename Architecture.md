@@ -17,10 +17,11 @@ Runtime ownership:
 - `web_target` starts from `src/bin/web_target.rs` via `cargo run --bin web_target --`
 
 Supported interaction model:
-- `ai-sec` talks to model providers directly today
+- `ai-sec` talks either to model providers directly or to `web_target` through
+  an external HTTP client
 - `web_target` serves browser and HTTP traffic as an independent process
-- future `ai-sec -> web_target` integration goes only through external HTTP
-  endpoints and request/response contracts
+- `ai-sec -> web_target` integration goes only through external HTTP endpoints
+  and request/response contracts
 
 Allowed shared contract layer:
 - HTTP surface of `web_target`: `/health`, `/login`, `/chat`, `/api/chat`,
@@ -45,7 +46,7 @@ flowchart TD
     B["Browser user"] --> WEB["web_target binary"]
 
     CLI --> P["LLM providers"]
-    CLI -. future HTTP target mode .-> API["web_target HTTP API"]
+    CLI --> API["web_target HTTP API"]
     WEB --> API
     WEB --> DATA["Synthetic app data / policy layer"]
 
@@ -72,7 +73,7 @@ internal structure is now split by responsibility:
   decisions
 - `src/bin/webapp/html.rs` — server-rendered login/chat pages
 
-This keeps the web target self-contained and suitable for future HTTP-client
+This keeps the web target self-contained and suitable for HTTP-client
 integration without exposing internal Rust modules across runtime boundaries.
 
 ## web_target API Contract
@@ -83,7 +84,7 @@ Current external surface:
 - `GET /login` → login page for demo users and security profiles
 - `POST /login` → sets session cookie and redirects to `/chat`
 - `GET /chat` / `POST /chat` → browser flow backed by the same policy layer
-- `POST /api/chat` → session-backed JSON chat endpoint for future `ai-sec`
+- `POST /api/chat` → session-backed JSON chat endpoint used by `ai-sec`
   HTTP-target mode
 - `POST /logout` → clears session cookie and redirects to `/login`
 
@@ -129,6 +130,7 @@ flowchart LR
     APP --> APP2["runtime.rs"]
     APP --> APP3["providers.rs"]
     APP --> APP4["scenarios.rs"]
+    APP --> APP5["target.rs"]
 
     APP2 --> ATK["src/attacks"]
     APP2 --> PAY["src/payloads"]
@@ -161,7 +163,7 @@ flowchart TD
     D --> E1["interactive::run_interactive() when no subcommand"]
     D --> E2["runtime::run_command() when subcommand is present"]
 
-    E2 --> F["Resolve provider(s), attacks, optional scenario, optional generated mode"]
+    E2 --> F["Resolve provider(s) or HTTP target, attacks, optional scenario, optional generated mode"]
     F --> G["Load payloads / scenario assets"]
     G --> H["Create AttackRunner"]
     H --> I["Run attacks per provider"]
@@ -215,12 +217,19 @@ Responsibilities:
 - map provider-specific HTTP responses into common `ProviderError`
 - return a normalized `LLMResponse`
 
-Current providers:
+Model providers:
 - OpenAI
 - Anthropic
 - DeepSeek
 - YandexGPT
 - Ollama
+
+External target transport:
+- `HttpTargetProvider` logs in to `web_target`, persists the session cookie,
+  sends requests to `/api/chat`, and returns normalized `LLMResponse` values
+  back into the existing attack engine
+- the same provider-like abstraction also exposes session-level `target`
+  metadata for JSON and terminal reports
 
 Retry policy:
 - retries only on timeout, transport/network failure, and HTTP `429`
@@ -234,12 +243,14 @@ flowchart TD
     B --> C3["DeepSeekProvider"]
     B --> C4["YandexGptProvider"]
     B --> C5["OllamaProvider"]
+    B --> C6["HttpTargetProvider"]
 
     C1 --> D["shared HTTP client"]
     C2 --> D
     C3 --> D
     C4 --> D
     C5 --> D
+    C6 --> D
 
     D --> E["timeout"]
     D --> F["retry/backoff"]

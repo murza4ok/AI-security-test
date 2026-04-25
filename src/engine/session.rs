@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const REPORT_SCHEMA_VERSION: u32 = 3;
+pub const REPORT_SCHEMA_VERSION: u32 = 4;
 
 /// Scenario-level metadata for synthetic sensitive-data exposure runs.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -183,6 +183,44 @@ pub struct BenchmarkMetadata {
     pub benchmark_key: String,
 }
 
+/// External target metadata captured for HTTP-target runs.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TargetMetadata {
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default)]
+    pub base_url: Option<String>,
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    #[serde(default)]
+    pub authenticated_user: Option<String>,
+    #[serde(default)]
+    pub security_profile: Option<String>,
+    #[serde(default)]
+    pub tenant: Option<String>,
+    #[serde(default)]
+    pub session_persistence: Option<String>,
+    #[serde(default)]
+    pub requests_sent: usize,
+    #[serde(default)]
+    pub tool_calls_attempted: Vec<String>,
+    #[serde(default)]
+    pub tool_calls_allowed: Vec<String>,
+    #[serde(default)]
+    pub tool_calls_denied: Vec<String>,
+    #[serde(default)]
+    pub redactions: Vec<String>,
+}
+
+impl TargetMetadata {
+    pub fn normalize(&mut self) {
+        dedupe_sorted(&mut self.tool_calls_attempted);
+        dedupe_sorted(&mut self.tool_calls_allowed);
+        dedupe_sorted(&mut self.tool_calls_denied);
+        dedupe_sorted(&mut self.redactions);
+    }
+}
+
 /// A complete test session, one per `ai-sec run` invocation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestSession {
@@ -193,6 +231,8 @@ pub struct TestSession {
     pub finished_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub provider: ProviderMetadata,
+    #[serde(default)]
+    pub target: TargetMetadata,
     #[serde(default)]
     pub config: SessionConfig,
     #[serde(default)]
@@ -212,6 +252,7 @@ impl TestSession {
             started_at: Utc::now(),
             finished_at: None,
             provider,
+            target: TargetMetadata::default(),
             config,
             benchmark: BenchmarkMetadata::default(),
             scenario: ScenarioMetadata::default(),
@@ -246,6 +287,7 @@ impl TestSession {
     /// Recompute cached report metadata and derived metrics.
     pub fn refresh_metrics(&mut self) {
         self.schema_version = REPORT_SCHEMA_VERSION;
+        self.target.normalize();
         for run in &mut self.attacks_run {
             run.refresh_metrics();
         }
@@ -293,6 +335,11 @@ impl TestSession {
 
 fn default_report_schema_version() -> u32 {
     REPORT_SCHEMA_VERSION
+}
+
+fn dedupe_sorted(values: &mut Vec<String>) {
+    values.sort();
+    values.dedup();
 }
 
 #[cfg(test)]

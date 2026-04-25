@@ -40,6 +40,7 @@ pub async fn run_interactive(
                     None,
                     None,
                     None,
+                    None,
                 )
                 .await?;
             }
@@ -69,6 +70,7 @@ pub async fn run_interactive(
                     selected_attacks,
                     &loader,
                     &app_config,
+                    None,
                     None,
                     None,
                     None,
@@ -116,10 +118,7 @@ pub async fn run_interactive(
     Ok(())
 }
 
-fn print_provider_availability(
-    cli_args: &cli::args::Cli,
-    app_config: &config::AppConfig,
-) -> bool {
+fn print_provider_availability(cli_args: &cli::args::Cli, app_config: &config::AppConfig) -> bool {
     match providers::build_all_providers(&cli_args.provider, None, app_config) {
         Ok(providers_list) => {
             print_selected_providers(&providers_list);

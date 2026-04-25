@@ -17,6 +17,40 @@ pub fn print_session_summary(session: &TestSession) {
         "  Requested model: {}",
         session.provider.requested_model.bold()
     );
+    if let Some(target_mode) = &session.target.mode {
+        println!("  Target mode: {}", target_mode.bold());
+        if let Some(base_url) = &session.target.base_url {
+            println!("  Target URL: {}", base_url.bold());
+        }
+        if let Some(endpoint) = &session.target.endpoint {
+            println!("  Target endpoint: {}", endpoint.bold());
+        }
+        if let Some(user) = &session.target.authenticated_user {
+            println!("  Target user: {}", user.bold());
+        }
+        if let Some(profile) = &session.target.security_profile {
+            println!("  Target profile: {}", profile.bold());
+        }
+        println!("  Target requests: {}", session.target.requests_sent);
+        if !session.target.tool_calls_attempted.is_empty() {
+            println!(
+                "  Target tool calls attempted: {}",
+                session.target.tool_calls_attempted.join(", ")
+            );
+        }
+        if !session.target.tool_calls_denied.is_empty() {
+            println!(
+                "  Target tool calls denied: {}",
+                session.target.tool_calls_denied.join(", ")
+            );
+        }
+        if !session.target.redactions.is_empty() {
+            println!(
+                "  Target redactions: {}",
+                session.target.redactions.join(", ")
+            );
+        }
+    }
     println!("  Attacks run: {}", session.attacks_run.len());
     if session.summary.total_generated_payloads > 0 {
         println!(
@@ -62,19 +96,32 @@ pub fn print_session_summary(session: &TestSession) {
             Cell::new(format!("{}/{}", run.success_count, run.payloads_tested)).fg(Color::Red),
             Cell::new(run.informational_count).fg(Color::DarkGrey),
             Cell::new(run.generated_payloads).fg(Color::Cyan),
-            Cell::new(format!("{:.0}%", bypass_pct))
-                .fg(if bypass_pct > 0.0 { Color::Red } else { Color::Green }),
+            Cell::new(format!("{:.0}%", bypass_pct)).fg(if bypass_pct > 0.0 {
+                Color::Red
+            } else {
+                Color::Green
+            }),
         ]);
     }
 
     let summary = &session.summary;
     table.add_row(vec![
         Cell::new("TOTAL").add_attribute(Attribute::Bold),
-        Cell::new(format!("{}/{}", summary.total_refused, summary.total_payloads))
-            .fg(Color::Green),
-        Cell::new(format!("{}/{}", summary.total_partial, summary.total_payloads))
-            .fg(Color::Yellow),
-        Cell::new(format!("{}/{}", summary.total_success, summary.total_payloads)).fg(Color::Red),
+        Cell::new(format!(
+            "{}/{}",
+            summary.total_refused, summary.total_payloads
+        ))
+        .fg(Color::Green),
+        Cell::new(format!(
+            "{}/{}",
+            summary.total_partial, summary.total_payloads
+        ))
+        .fg(Color::Yellow),
+        Cell::new(format!(
+            "{}/{}",
+            summary.total_success, summary.total_payloads
+        ))
+        .fg(Color::Red),
         Cell::new(summary.total_informational).fg(Color::DarkGrey),
         Cell::new(summary.total_generated_payloads).fg(Color::Cyan),
         Cell::new(format!("{:.0}%", summary.bypass_rate_pct)).add_attribute(Attribute::Bold),
@@ -83,8 +130,7 @@ pub fn print_session_summary(session: &TestSession) {
     println!("{}", table);
     println!(
         "  {}",
-        "* Bypass % counts only L2/L3 payloads; L0 and L1 are excluded from scoring"
-            .bright_black()
+        "* Bypass % counts only L2/L3 payloads; L0 and L1 are excluded from scoring".bright_black()
     );
     println!();
 }
@@ -122,7 +168,13 @@ pub fn print_saved_sessions_overview(sessions: &[SavedSessionInfo]) {
 
         table.add_row(vec![
             Cell::new(index + 1),
-            Cell::new(saved.session.started_at.format("%Y-%m-%d %H:%M UTC").to_string()),
+            Cell::new(
+                saved
+                    .session
+                    .started_at
+                    .format("%Y-%m-%d %H:%M UTC")
+                    .to_string(),
+            ),
             Cell::new(&saved.session.provider.provider_name),
             Cell::new(&saved.session.provider.requested_model),
             Cell::new(saved.session.attacks_run.len()),
@@ -257,7 +309,8 @@ pub fn print_session_review(session: &TestSession) {
             if result.generated {
                 println!(
                     "       -> generated from seed {}",
-                    result.seed_payload_id
+                    result
+                        .seed_payload_id
                         .as_deref()
                         .unwrap_or("<unknown>")
                         .dimmed()
@@ -308,7 +361,10 @@ pub fn print_session_review(session: &TestSession) {
                 );
             }
             if result.damage.score > 0 {
-                println!("       -> damage score: {}", result.damage.score.to_string().red());
+                println!(
+                    "       -> damage score: {}",
+                    result.damage.score.to_string().red()
+                );
                 println!(
                     "       -> damage level: {} ({})",
                     format!("{:?}", result.damage.level).red(),
@@ -336,8 +392,7 @@ pub fn print_session_review(session: &TestSession) {
 
             match &result.evaluation {
                 crate::engine::evaluator::EvaluationResult::Refused {
-                    matched_phrases,
-                    ..
+                    matched_phrases, ..
                 } => {
                     println!(
                         "       -> refusal signals: {}",
@@ -345,8 +400,7 @@ pub fn print_session_review(session: &TestSession) {
                     );
                 }
                 crate::engine::evaluator::EvaluationResult::Success {
-                    matched_phrases,
-                    ..
+                    matched_phrases, ..
                 } => {
                     println!(
                         "       -> bypass signals: {}",
