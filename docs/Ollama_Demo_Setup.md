@@ -121,12 +121,19 @@ Saved reports can be compared directly:
 cargo run --bin ai-sec -- compare /tmp/ollama-direct.json /tmp/ollama-support-bot.json /tmp/ollama-multiturn.json
 ```
 
-`review` and `compare` now expose:
+`review` shows the detailed payload-level evidence:
 
 - scenario exposure metadata;
 - HTTP target metadata when present;
 - tool decisions and redactions;
 - multi-turn transcript details.
+
+`compare` is the higher-level session summary view for:
+
+- provider/model/mode comparison;
+- target or scenario labels;
+- exposure, chain, and request counts;
+- per-attack bypass percentages across saved reports.
 
 ## What Is Intentionally Not Documented Here
 

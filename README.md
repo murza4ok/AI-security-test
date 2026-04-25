@@ -206,11 +206,17 @@ RETRY_MAX_DELAY_MS=4000
 CONCURRENCY=5
 ```
 
-Проверка после настройки:
+Быстрая CLI sanity-check после настройки:
 
 ```bash
 cargo run --bin ai-sec -- list
 cargo run --bin ai-sec -- help run
+```
+
+Проверка доступности конкретного провайдера после настройки:
+
+```bash
+cargo run --bin ai-sec -- check --provider ollama
 ```
 
 ## Режимы работы CLI
