@@ -5,9 +5,9 @@
 ## Current Continuation Point
 
 - integration branch: `codex/weekend-integration`
-- current next branch to start: `codex/multi-turn-foundation`
-- current next task-pack: `development/branches/08-multi-turn-foundation/task.md`
-- current wave to continue: `Wave 5`
+- current next branch to start: `codex/reporting-hardening`
+- current next task-pack: `development/branches/09-reporting-hardening/task.md`
+- current wave to continue: `Wave 6`
 - prompts location: `prompts.md`
 
 ## Completed Stages
@@ -285,9 +285,54 @@ Residual note:
 - live smoke был подтверждён на single-turn classic attack path `prompt_injection` и профиле `customer_alice + naive`;
 - HTTP mode пока сознательно ограничен classic payload-driven flow и не покрывает `sensitive_data_exposure` или multi-turn chains: это следующий этап `08`.
 
+### 08. Multi-Turn Foundation
+
+Статус:
+- completed
+- merged into `codex/weekend-integration`
+
+Feature branch:
+- `codex/multi-turn-foundation`
+
+Feature commits:
+- `29c3a24`
+- `7f227b1`
+
+Integration merge:
+- `8ee77cd`
+
+Что сделано:
+- введён базовый conversation-chain contract поверх существующего attack engine без переработки provider factory;
+- payload loader теперь поддерживает multi-turn payload format через `[[payloads.turns]]` с длиной цепочки от `2` до `5` шагов;
+- для stateless/local provider path следующий ход строится через prompt-history replay, а для HTTP target mode используется native session path без встраивания истории в запрос;
+- в `AttackResult` и review/report path добавлены transcript metadata: `transcript`, `chain_planned_turns`, `chain_executed_turns`, `chain_completed`, `chain_abort_reason`;
+- добавлен payload/doc contract для chain format в `docs/Chain_Payload_Format.md`;
+- в corpus добавлен multi-turn smoke payload `payloads/prompt_injection/00_multi_turn.toml`;
+- follow-up fix закрывает reviewer finding: provider error теперь честно останавливает chain и не маркируется как completed run.
+
+Проверки:
+- `cargo check --offline --all-targets`
+- `cargo test --offline`
+- `env OLLAMA_BASE_URL=http://127.0.0.1:11434 OLLAMA_MODEL=qwen2.5:0.5b cargo run --offline --bin ai-sec -- check --provider ollama`
+- `env OLLAMA_BASE_URL=http://127.0.0.1:11434 OLLAMA_MODEL=qwen2.5:0.5b cargo run --offline --bin ai-sec -- run --attack prompt_injection --provider ollama --limit 1 --output /tmp/wt08-multiturn-local.json`
+- `cargo run --offline --bin web_target --`
+- `curl -i http://127.0.0.1:3000/health`
+- `cargo run --offline --bin ai-sec -- run --attack prompt_injection --target-mode http --target-base-url http://127.0.0.1:3000 --target-user customer_alice --target-profile naive --limit 1 --output /tmp/wt08-multiturn-http.json`
+- `cargo run --offline --bin ai-sec -- review /tmp/wt08-multiturn-http.json`
+- `jq '{first_result: .attacks_run[0].results[0] | {chain_planned_turns, chain_executed_turns, chain_completed, transcript_count: (.transcript|length)}}' /tmp/wt08-multiturn-local.json`
+- `jq '{target: .target.requests_sent, first_result: .attacks_run[0].results[0] | {chain_planned_turns, chain_executed_turns, chain_completed, transcript_count: (.transcript|length)}}' /tmp/wt08-multiturn-http.json`
+
+Reviewer note:
+- reviewer-agent вернул промежуточные findings до follow-up fix: provider-error path ошибочно продолжал chain и sandbox не подтверждал local smoke;
+- findings были закрыты в feature follow-up commit `7f227b1`, после чего local и HTTP smoke были повторно подтверждены координатором на live path;
+- финальный merge verdict принят координатором на основе passing checks, live smoke evidence и закрытого reviewer defect.
+
+Residual note:
+- для совместимости с расширенным payload contract пришлось сделать минимальные compile-through адаптации в `src/generator/mod.rs` и test helpers внутри `src/scenarios/*`; это не отдельный feature-work, а узкая техническая адаптация к новому `Payload` shape;
+- reporting model под multi-turn transcript уже работает, но полноценное выпрямление compare/review/report contract вынесено в следующий этап `09`.
+
 ## Not Started Yet
 
-- `08-multi-turn-foundation`
 - `09-reporting-hardening`
 - `10-docs-consistency-sweep`
 - `11-integration-smoke`
@@ -296,7 +341,7 @@ Residual note:
 
 1. Открой `development/STATUS.md`.
 2. Убедись, что текущая база — `codex/weekend-integration`.
-3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor`, `05-scenario-contract`, `06-web-target-structure` и `07-http-target-client`: они уже завершены и влиты в integration branch.
-4. Следующая рабочая ветка по плану: `codex/multi-turn-foundation`.
-5. Используй task-pack `development/branches/08-multi-turn-foundation/task.md`.
-6. Перед стартом `08` учитывай residual note из `07`: HTTP target mode уже стабилен для single-turn classic flow, а следующий шаг должен добавлять chain execution без выхода за allowed scope `08`.
+3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor`, `05-scenario-contract`, `06-web-target-structure`, `07-http-target-client` и `08-multi-turn-foundation`: они уже завершены и влиты в integration branch.
+4. Следующая рабочая ветка по плану: `codex/reporting-hardening`.
+5. Используй task-pack `development/branches/09-reporting-hardening/task.md`.
+6. Перед стартом `09` учитывай residual note из `08`: chain execution и transcript metadata уже появились, а следующий шаг должен довести compare/review/report contract до единого источника истины без возврата в provider layer.
