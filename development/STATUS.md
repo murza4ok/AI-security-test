@@ -5,9 +5,9 @@
 ## Current Continuation Point
 
 - integration branch: `codex/weekend-integration`
-- current next branch to start: `codex/integration-smoke`
-- current next task-pack: `development/branches/11-integration-smoke/task.md`
-- current wave to continue: `Wave 7`
+- current next branch to start: `none`
+- current next task-pack: `none`
+- current wave to continue: `completed`
 - prompts location: `prompts.md`
 
 ## Completed Stages
@@ -409,15 +409,44 @@ Integration merge:
 Residual note:
 - `web_target` по-прежнему не имеет отдельного help-path: `cargo run --bin web_target -- --help` стартует сервер и упрётся в занятый порт, если target уже поднят; для этого runtime рабочей проверкой остаётся запуск бинаря или `cargo check --all-targets`.
 
+### 11. Integration Smoke
+
+Статус:
+- completed
+
+Feature branch:
+- `codex/integration-smoke`
+
+Что сделано:
+- собрана итоговая интеграционная ветка поверх merge-результата `01`–`10` без новых feature-изменений;
+- общая матрица `cargo check`, `cargo test`, direct provider run, scenario run, HTTP target run, `review` и `compare` подтверждена на одной и той же интеграционной базе;
+- подтверждено, что `web_target` живо отвечает по `/health`, а HTTP attack path работает поверх фиксированного локального target;
+- зафиксировано, что weekend-план закрыт без официально отложенных feature-этапов: `01`–`11` выполнены.
+
+Проверки:
+- `cargo check --offline --all-targets`
+- `cargo test --offline`
+- `cargo run --offline --bin ai-sec -- list`
+- `curl -i http://127.0.0.1:3000/health`
+- `env OLLAMA_BASE_URL=http://127.0.0.1:11434 OLLAMA_MODEL=qwen2.5:0.5b cargo run --offline --bin ai-sec -- run --attack jailbreaking --provider ollama --limit 1 --output /tmp/wt11-direct.json`
+- `env OLLAMA_BASE_URL=http://127.0.0.1:11434 OLLAMA_MODEL=qwen2.5:0.5b cargo run --offline --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot --limit 1 --output /tmp/wt11-scenario.json`
+- `cargo run --offline --bin ai-sec -- run --attack jailbreaking --target-mode http --target-base-url http://127.0.0.1:3000 --target-user customer_alice --target-profile naive --limit 1 --output /tmp/wt11-http.json`
+- `cargo run --offline --bin ai-sec -- review /tmp/wt11-scenario.json`
+- `cargo run --offline --bin ai-sec -- compare /tmp/wt11-direct.json /tmp/wt11-scenario.json /tmp/wt11-http.json`
+- `cargo run --offline --bin web_target --`
+
+Residual note:
+- `web_target` использует фиксированный `127.0.0.1:3000`, поэтому отдельный launch path на финальной ветке упрётся в `Address already in use`, если живой target уже поднят; в этом интеграционном smoke это подтверждено вместе с `curl /health` и реальным HTTP attack run.
+- live direct run по `jailbreaking` по-прежнему может показывать промежуточный `PARTIAL` в stream-output до финального persisted verdict; источником истины остаются сохранённый JSON report, `review` и `compare`.
+
 ## Not Started Yet
 
-- `11-integration-smoke`
+- none
 
 ## Resume Procedure
 
 1. Открой `development/STATUS.md`.
 2. Убедись, что текущая база — `codex/weekend-integration`.
-3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor`, `05-scenario-contract`, `06-web-target-structure`, `07-http-target-client`, `08-multi-turn-foundation`, `09-reporting-hardening` и `10-docs-consistency-sweep`: они уже завершены и влиты в integration branch.
-4. Следующая рабочая ветка по плану: `codex/integration-smoke`.
-5. Используй task-pack `development/branches/11-integration-smoke/task.md`.
-6. Перед стартом `11` учитывай residual note из `10`: для `web_target` честной smoke-проверкой остаётся живой запуск/HTTP-check, а не `--help` path.
+3. Weekend-итерация по плану `01`–`11` завершена.
+4. Если начинается новая работа, создавай новую ветку уже от актуального `codex/weekend-integration`.
+5. Исторические проверки и residual notes по завершённым этапам сохранены выше в этом файле.
