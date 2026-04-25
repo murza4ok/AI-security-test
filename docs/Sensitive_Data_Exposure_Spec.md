@@ -16,9 +16,9 @@ exposure:
 ## Supported CLI Shape
 
 ```bash
-ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot
-ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario hr_bot
-ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario internal_rag_bot
+cargo run --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot
+cargo run --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --app-scenario hr_bot
+cargo run --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --app-scenario internal_rag_bot
 ```
 
 Optional flags:
