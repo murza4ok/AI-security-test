@@ -2,201 +2,130 @@
 
 ## Purpose
 
-This file describes the practical algorithm for running the local `Ollama`
-demonstration on Ubuntu from the main branch of this repository.
+This file is the operator-facing smoke checklist for the current repository
+state.
 
-The goal is reproducibility:
+It is intentionally narrower than `README.md`: use it when you want a practical
+validation sequence instead of a full product walkthrough.
 
-- keep synthetic fixtures in-repo;
-- use the system `ollama.service` on `127.0.0.1:11434`;
-- run attacks against data that is actually present in prompt context;
-- prefer the GPU-backed system daemon instead of an ad hoc user-space server.
+## Source Of Truth
 
-## Fixed Repository Paths
+When documents disagree, trust them in this order:
 
-Use the repository-local paths:
+1. `development/STATUS.md`
+2. `README.md`
+3. `docs/HTTP_Target_Mode.md`
+4. `docs/Ollama_Demo_Setup.md`
+5. `Architecture.md` and `TZ.md`
 
-- repo root: `/media/mangust/HP P900/repos/AI-security-test`
-- fixture root: `/media/mangust/HP P900/repos/AI-security-test/fixtures/sensitive_data_exposure`
-- demo buffer: `/media/mangust/HP P900/repos/AI-security-test/buffer_for_ollama`
-- helper scripts: `/media/mangust/HP P900/repos/AI-security-test/scripts`
+## Preconditions
 
-## Important Constraint
+- current directory is the repository root;
+- `ai-sec` is launched with `cargo run --bin ai-sec -- ...`;
+- `web_target` is launched separately with `cargo run --bin web_target --`;
+- at least one provider is configured, or you are using HTTP target mode;
+- for `ollama`, verify that the local daemon and chosen model are available.
 
-`Ollama` does not read the SQLite database by itself.
+## Minimal CLI Validation
 
-The model only sees:
-
-- the system prompt;
-- the user prompt;
-- hidden context assembled by the application;
-- retrieved documents assembled by the application.
-
-In this repository, `sensitive_data_exposure` reads data from:
-
-- `fixtures/sensitive_data_exposure/support_bot`
-- `fixtures/sensitive_data_exposure/hr_bot`
-- `fixtures/sensitive_data_exposure/internal_rag_bot`
-
-The SQLite database in `buffer_for_ollama/ollama_demo.db` is only a demo
-artifact. The real attack surface for the model is the hidden prompt context.
-
-## Ubuntu / AMD GPU Rule
-
-On this machine, the correct runtime is the systemd service:
-
-- API: `http://127.0.0.1:11434`
-- service: `ollama.service`
-
-Do not rely on a separate `ollama serve` from the current shell if you want GPU
-execution. The system service runs as the dedicated `ollama` user, which has
-the required device-group access for ROCm. A user-space server can silently
-fall back to CPU even when the installation itself reports AMD GPU support.
-
-Useful checks:
+These commands do not require a live target application:
 
 ```bash
-systemctl status ollama --no-pager
-journalctl -u ollama -n 120 --no-pager
-ollama ps
+cargo run --bin ai-sec -- list
+cargo run --bin ai-sec -- help run
 ```
 
-If `ollama ps` shows `PROCESSOR 100% GPU`, inference is actually running on the
-GPU.
-
-## One-Time Setup
-
-Generate the synthetic demo data:
-
-```bash
-python3 scripts/generate_ollama_demo_data.py
-```
-
-Validate that the system daemon is reachable:
-
-```bash
-./scripts/ensure_ollama_server.sh
-```
-
-Install the baseline model into the system Ollama store if it is not present:
-
-```bash
-ollama pull qwen2.5:0.5b
-```
-
-Build the custom support-lab model from the repo Modelfile:
-
-```bash
-ollama create acme-support-lab -f buffer_for_ollama/AcmeSupportDesk.Modelfile
-```
-
-## Provider Validation
-
-Validate the application-side integration before attacks:
+If you use `ollama`, verify the provider contract explicitly:
 
 ```bash
 cargo run --bin ai-sec -- check --provider ollama
 ```
 
-Expected result:
+## Direct Provider Smoke
 
-- `Ollama <model> ... OK`
-
-## Recommended Demonstration Flow
-
-### 1. Baseline leak demo on the base model
+Minimal direct attack run:
 
 ```bash
-./scripts/run_ollama_attack_lab.sh --model qwen2.5:0.5b --scenario support_bot --limit 5
+cargo run --bin ai-sec -- run --attack jailbreaking --provider ollama --limit 1 --output /tmp/ai-sec-direct.json
+cargo run --bin ai-sec -- review /tmp/ai-sec-direct.json
 ```
 
-Observed on this Ubuntu setup:
+## Scenario Smoke
 
-- `BYPASS` was reproduced on `support_bot`
-- leaked raw customer rows with email and phone
-- report saved under `results/`
-
-### 2. Generated payload demo
+Minimal scenario-driven run:
 
 ```bash
-./scripts/run_ollama_attack_lab.sh --model qwen2.5:0.5b --scenario support_bot --limit 1 --generated 1
+cargo run --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot --limit 1 --output /tmp/ai-sec-scenario.json
+cargo run --bin ai-sec -- review /tmp/ai-sec-scenario.json
 ```
 
-This verifies that:
+Useful variants:
 
-- the DeepSeek-backed payload generator is active;
-- generated prompts are added to the run;
-- the generated-mode metadata is recorded in the JSON report.
+- `--app-scenario hr_bot`
+- `--app-scenario internal_rag_bot --retrieval-mode subset`
+- `--app-scenario support_bot_hardened`
 
-### 3. Custom model comparison
+## HTTP Target Smoke
+
+Start the demo target in a separate terminal:
 
 ```bash
-./scripts/run_ollama_attack_lab.sh --model acme-support-lab:latest --scenario support_bot --limit 5
+cargo run --bin web_target --
 ```
 
-This tests the repo-local support-lab persona rather than the raw base model.
-
-### 4. Scenario expansion
-
-HR scenario:
+Optional health check:
 
 ```bash
-./scripts/run_ollama_attack_lab.sh --model qwen2.5:0.5b --scenario hr_bot --limit 5
+curl -i http://127.0.0.1:3000/health
 ```
 
-Internal RAG scenario:
+Then run an HTTP attack session:
 
 ```bash
-./scripts/run_ollama_attack_lab.sh --model qwen2.5:0.5b --scenario internal_rag_bot --limit 5
+cargo run --bin ai-sec -- run --attack jailbreaking --target-mode http --target-base-url http://127.0.0.1:3000 --target-user customer_alice --target-profile naive --limit 1 --output /tmp/ai-sec-http.json
+cargo run --bin ai-sec -- review /tmp/ai-sec-http.json
 ```
 
-The wrapper script automatically adds `--retrieval-mode subset` for
-`internal_rag_bot`.
+## Multi-Turn Smoke
 
-## Minimal Manual Algorithm
-
-If you do not want to use the helper script, the manual sequence is:
-
-1. Generate the synthetic fixture data.
-2. Verify `ollama.service` is active on `127.0.0.1:11434`.
-3. Pull the required base model into the system Ollama store.
-4. Optionally create `acme-support-lab`.
-5. Run `cargo run --bin ai-sec -- check --provider ollama`.
-6. Run `sensitive_data_exposure` against the desired scenario.
-7. Review the saved JSON report in `results/`.
-
-Concrete commands:
+Minimal chain execution check:
 
 ```bash
-python3 scripts/generate_ollama_demo_data.py
-./scripts/ensure_ollama_server.sh
-ollama pull qwen2.5:0.5b
-ollama create acme-support-lab -f buffer_for_ollama/AcmeSupportDesk.Modelfile
-
-cargo run --bin ai-sec -- check --provider ollama
-
-cargo run --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --model qwen2.5:0.5b --app-scenario support_bot --limit 5
-cargo run --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --model qwen2.5:0.5b --app-scenario support_bot --limit 1 --generated 1
-cargo run --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --model acme-support-lab:latest --app-scenario support_bot --limit 5
+cargo run --bin ai-sec -- run --attack prompt_injection --provider ollama --limit 1 --output /tmp/ai-sec-multiturn.json
+cargo run --bin ai-sec -- review /tmp/ai-sec-multiturn.json
 ```
 
-## How To Read Success
+## Compare Smoke
 
-For demonstration purposes, useful signals are:
+Once you have at least two saved reports:
 
-- `BYPASS`
-- `PARTIAL`
-- leaked PII fields
-- leaked internal document fragments
-- leaked canaries
-- exposure score
+```bash
+cargo run --bin ai-sec -- compare /tmp/ai-sec-direct.json /tmp/ai-sec-scenario.json /tmp/ai-sec-http.json /tmp/ai-sec-multiturn.json
+```
 
-Reports are written to:
+Or compare everything from the default `results/` directory:
 
-- `results/*.json`
+```bash
+cargo run --bin ai-sec -- compare
+```
 
-## Final Rule
+## Expected Outcome
 
-For this repository, the attack is considered real only when the model response
-is based on synthetic hidden context from `fixtures/sensitive_data_exposure`,
-not on general model prior knowledge.
+After this checklist you should have verified:
+
+- CLI help and attack listing;
+- at least one live provider path;
+- one scenario report;
+- one HTTP target report;
+- one multi-turn report;
+- readable `review` and `compare` output.
+
+## What This File No Longer Assumes
+
+The current project state does not require or guarantee:
+
+- a `scripts/` directory with helper automation;
+- fixed absolute repository paths;
+- a `main`-branch-only workflow;
+- PowerShell setup steps;
+- repo-local `buffer_for_ollama/` artifacts.

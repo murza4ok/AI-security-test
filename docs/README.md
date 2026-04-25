@@ -17,8 +17,7 @@
 - `Sensitive_Data_Exposure_Spec.md` — спецификация сценарного режима `sensitive_data_exposure`.
 - `HTTP_Target_Mode.md` — CLI contract и ограничения HTTP-режима для `web_target`.
 - `Chain_Payload_Format.md` — формат multi-turn payload chains и transcript contract.
-- `Ollama_Demo_Setup.md` — практический запуск локального demo-контура на `Ollama`.
-- `Ollama_Demo_Generator.md` — генерация demo-harness и вспомогательных скриптов для `Ollama`.
+- `Ollama_Demo_Setup.md` — актуальный локальный workflow для `Ollama` без несуществующих helper-скриптов.
 
 ## Активные документы в корне репозитория
 
@@ -27,6 +26,8 @@
 - `TZ.md` — целевое техническое задание.
 - `Roadmap_weekend.md` — чек-лист ожидаемого результата итерации.
 - `Branch_tasks.md` — ветки разработки, их границы и обязательные проверки.
+- `Test_instruction.md` — практический smoke-check и operator checklist для локальной валидации.
+- `development/STATUS.md` — фактическая точка продолжения между Codex-сессиями.
 - `refactoring.md` — технический аудит проблем, долга и приоритетов рефакторинга.
 
 ## Что больше не используется
@@ -35,12 +36,14 @@
 
 - `Memory.md`
 - `Plan_for_operator.md`
+- `Ollama_Demo_Generator.md`
 
 Причина:
 
 - они были персональными рабочими памятками;
 - они быстро устаревают;
-- их содержимое теперь должно жить в актуальных документах: `README.md`, `TZ.md`, `Roadmap_weekend.md`, `Branch_tasks.md`, `refactoring.md` и тематических файлах из `docs/`.
+- удалённый `Ollama_Demo_Generator.md` ссылался на несуществующие `scripts/`, `buffer_for_ollama/` и старый Windows-only workflow;
+- их содержимое теперь должно жить в актуальных документах: `README.md`, `TZ.md`, `Roadmap_weekend.md`, `Branch_tasks.md`, `Test_instruction.md`, `refactoring.md` и тематических файлах из `docs/`.
 
 ## Правило сопровождения
 

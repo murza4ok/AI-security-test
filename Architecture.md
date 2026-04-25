@@ -191,7 +191,7 @@ sequenceDiagram
     participant SES as TestSession
     participant RPT as Reporting
 
-    U->>CLI: ai-sec run --attack jailbreaking --provider openai
+    U->>CLI: cargo run --bin ai-sec -- run --attack jailbreaking --provider openai
     CLI->>CFG: from_env()
     CLI->>REG: find_attack()
     CLI->>LDR: load_category()
@@ -419,14 +419,14 @@ flowchart TD
 
 ## Key Files
 
-- Entry point: [src/main.rs](/E:/repos/AI-security-test/src/main.rs)
-- Config: [src/config/mod.rs](/E:/repos/AI-security-test/src/config/mod.rs)
-- Provider trait: [src/providers/traits.rs](/E:/repos/AI-security-test/src/providers/traits.rs)
-- Provider helpers: [src/providers/mod.rs](/E:/repos/AI-security-test/src/providers/mod.rs)
-- Runner: [src/engine/runner.rs](/E:/repos/AI-security-test/src/engine/runner.rs)
-- Evaluator: [src/engine/evaluator.rs](/E:/repos/AI-security-test/src/engine/evaluator.rs)
-- Session/report model: [src/engine/session.rs](/E:/repos/AI-security-test/src/engine/session.rs)
-- JSON report: [src/reporting/json_report.rs](/E:/repos/AI-security-test/src/reporting/json_report.rs)
-- Terminal reporting: [src/reporting/terminal_report.rs](/E:/repos/AI-security-test/src/reporting/terminal_report.rs)
-- Attack registry: [src/attacks/registry.rs](/E:/repos/AI-security-test/src/attacks/registry.rs)
-- Payload loader: [src/payloads/loader.rs](/E:/repos/AI-security-test/src/payloads/loader.rs)
+- Entry point: [src/main.rs](src/main.rs)
+- Config: [src/config/mod.rs](src/config/mod.rs)
+- Provider trait: [src/providers/traits.rs](src/providers/traits.rs)
+- Provider helpers: [src/providers/mod.rs](src/providers/mod.rs)
+- Runner: [src/engine/runner.rs](src/engine/runner.rs)
+- Evaluator: [src/engine/evaluator.rs](src/engine/evaluator.rs)
+- Session/report model: [src/engine/session.rs](src/engine/session.rs)
+- JSON report: [src/reporting/json_report.rs](src/reporting/json_report.rs)
+- Terminal reporting: [src/reporting/terminal_report.rs](src/reporting/terminal_report.rs)
+- Attack registry: [src/attacks/registry.rs](src/attacks/registry.rs)
+- Payload loader: [src/payloads/loader.rs](src/payloads/loader.rs)

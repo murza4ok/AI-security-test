@@ -5,8 +5,8 @@
 ## Current Continuation Point
 
 - integration branch: `codex/weekend-integration`
-- current next branch to start: `codex/docs-consistency-sweep`
-- current next task-pack: `development/branches/10-docs-consistency-sweep/task.md`
+- current next branch to start: `codex/integration-smoke`
+- current next task-pack: `development/branches/11-integration-smoke/task.md`
 - current wave to continue: `Wave 7`
 - prompts location: `prompts.md`
 
@@ -371,9 +371,38 @@ Residual note:
 - live `run` output по отдельному payload всё ещё может показывать промежуточную эвристику до финального persisted verdict; источником истины для review/compare считается сохранённый session report;
 - docs-consistency sweep должен отдельно пройтись по пользовательским описаниям review/report contract, но кодовая часть reporting для `09` закрыта.
 
+### 10. Docs Consistency Sweep
+
+Статус:
+- completed
+
+Feature branch:
+- `codex/docs-consistency-sweep`
+
+Что сделано:
+- root docs, `docs/*` и operator-facing markdown выровнены с фактическим состоянием после `09-reporting-hardening`;
+- `README.md` и `docs/README.md` теперь явно показывают, где искать живую документацию, `Test_instruction.md` и `development/STATUS.md`;
+- `Test_instruction.md` переписан как практический smoke/demo checklist без ссылок на несуществующие helper-скрипты, fixed absolute paths и устаревший `buffer_for_ollama/` workflow;
+- `docs/Ollama_Demo_Generator.md` удалён как неподдерживаемый документ; актуальный `Ollama` flow оставлен в `docs/Ollama_Demo_Setup.md` и `Test_instruction.md`;
+- `Architecture.md` очищен от битых Windows-path ссылок на файлы репозитория;
+- `docs/Sensitive_Data_Exposure_Spec.md` приведён к поддерживаемому контракту запуска `cargo run --bin ai-sec -- ...`;
+- `BUNDLE_START_HERE.md` теперь честно указывает на `development/STATUS.md` как на живую точку продолжения, а не на исторический inline-status.
+
+Проверки:
+- ручной проход по `README.md`, `docs/*`, `TZ.md`, `Architecture.md`, `Branch_tasks.md`
+- `cargo check --offline --all-targets`
+- `cargo run --bin ai-sec -- --help`
+- `cargo run --bin ai-sec -- help run`
+- `cargo run --bin ai-sec -- list`
+- `cargo run --offline --bin ai-sec -- compare --help`
+- `cargo run --offline --bin ai-sec -- sessions --help`
+- `curl -i http://127.0.0.1:3000/health`
+
+Residual note:
+- `web_target` по-прежнему не имеет отдельного help-path: `cargo run --bin web_target -- --help` стартует сервер и упрётся в занятый порт, если target уже поднят; для этого runtime рабочей проверкой остаётся запуск бинаря или `cargo check --all-targets`.
+
 ## Not Started Yet
 
-- `10-docs-consistency-sweep`
 - `11-integration-smoke`
 
 ## Resume Procedure
@@ -381,6 +410,6 @@ Residual note:
 1. Открой `development/STATUS.md`.
 2. Убедись, что текущая база — `codex/weekend-integration`.
 3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor`, `05-scenario-contract`, `06-web-target-structure`, `07-http-target-client`, `08-multi-turn-foundation` и `09-reporting-hardening`: они уже завершены и влиты в integration branch.
-4. Следующая рабочая ветка по плану: `codex/docs-consistency-sweep`.
-5. Используй task-pack `development/branches/10-docs-consistency-sweep/task.md`.
-6. Перед стартом `10` учитывай residual note из `09`: кодовый report/review contract уже выровнен, а следующий шаг должен синхронизировать живую документацию с этим фактическим состоянием без возврата в `src/*`.
+4. Следующая рабочая ветка по плану: `codex/integration-smoke`.
+5. Используй task-pack `development/branches/11-integration-smoke/task.md`.
+6. Перед стартом `11` учитывай residual note из `10`: для `web_target` честной smoke-проверкой остаётся живой запуск/HTTP-check, а не `--help` path.

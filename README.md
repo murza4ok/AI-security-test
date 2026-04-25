@@ -70,8 +70,11 @@ Security profiles:
 - [TZ.md](TZ.md) — целевое техническое задание проекта.
 - [Roadmap_weekend.md](Roadmap_weekend.md) — итоговый чек-лист выходной итерации.
 - [Branch_tasks.md](Branch_tasks.md) — разбиение roadmap на ветки разработки.
+- [Test_instruction.md](Test_instruction.md) — практический smoke/demo checklist для оператора.
+- [development/STATUS.md](development/STATUS.md) — фактическая точка продолжения между сессиями.
 - [docs/README.md](docs/README.md) — индекс активной документации в `docs/`.
 - [docs/HTTP_Target_Mode.md](docs/HTTP_Target_Mode.md) — контракт HTTP-режима для атаки `web_target`.
+- [docs/Ollama_Demo_Setup.md](docs/Ollama_Demo_Setup.md) — подробный локальный workflow для `Ollama`.
 - [refactoring.md](refactoring.md) — технический аудит текущих проблем и долга.
 
 ## Что умеет инструмент
@@ -203,11 +206,17 @@ RETRY_MAX_DELAY_MS=4000
 CONCURRENCY=5
 ```
 
-Проверка после настройки:
+Быстрая CLI sanity-check после настройки:
 
 ```bash
-cargo build
-cargo run --bin ai-sec -- check
+cargo run --bin ai-sec -- list
+cargo run --bin ai-sec -- help run
+```
+
+Проверка доступности конкретного провайдера после настройки:
+
+```bash
+cargo run --bin ai-sec -- check --provider ollama
 ```
 
 ## Режимы работы CLI
@@ -559,7 +568,7 @@ cargo run --bin ai-sec -- compare
 - generator mode пока не является полноценным multi-turn attack agent;
 - retrieval в сценарном режиме rule-based, без embeddings;
 - маленькие локальные модели могут упираться в timeout на длинных сценарных prompt-ах;
-- текущий проект еще не перешел к web-target фазе из roadmap;
+- HTTP target mode сейчас ограничен внешним контрактом `web_target` и classic payload-driven категориями;
 - сохраненные JSON-отчеты могут содержать чувствительные synthetic артефакты теста.
 
 ## Безопасность использования

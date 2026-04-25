@@ -13,6 +13,10 @@
 - roadmap и branch orchestration;
 - task-pack для поэтапного запуска writer-agent по веткам.
 
+Важно: этот файл теперь выполняет роль исторической точки входа для bundle.
+Для фактического состояния разработки и точки продолжения между сессиями
+источником истины считается `development/STATUS.md`.
+
 ## Почему bundle собран как полный snapshot
 
 Для продолжения работы недостаточно перенести только сегодняшние документы.
@@ -28,7 +32,7 @@
 
 Поэтому bundle нужно воспринимать как полный приватный snapshot текущего рабочего дерева, а не только как перенос “сегодняшних заметок”.
 
-## Что было сделано сегодня
+## Что было зафиксировано в bundle
 
 Сегодня в репозитории был добавлен организационный слой для weekend-итерации:
 
@@ -45,13 +49,13 @@
 Прочитать документы в таком порядке:
 
 1. `BUNDLE_START_HERE.md`
-2. `development/README.md`
-3. `refactoring.md`
-4. `TZ.md`
-5. `Roadmap_weekend.md`
-6. `Branch_tasks.md`
-7. `development/branches/00-weekend-integration/task.md`
-8. `development/branches/01-runtime-boundary-contract/task.md`
+2. `development/STATUS.md`
+3. `development/README.md`
+4. `refactoring.md`
+5. `TZ.md`
+6. `Roadmap_weekend.md`
+7. `Branch_tasks.md`
+8. текущий `development/branches/*/task.md`, указанный в `development/STATUS.md`
 
 После этого уже смотреть:
 
@@ -62,19 +66,17 @@
 
 ## Текущий статус weekend-плана
 
-Step 0 завершён:
+Этот bundle больше не хранит актуальный status inline.
 
-- собран orchestration-layer;
-- созданы task-pack для всех веток;
-- подготовлен process-contract для writer-agent и reviewer-agent.
+Всегда смотрите:
 
-Фактическая feature-разработка по weekend-веткам ещё не начата.
+- текущий integration branch;
+- следующую рабочую ветку;
+- следующий task-pack;
+- уже завершённые этапы;
+- residual notes между этапами
 
-Следующий правильный шаг:
-
-1. создать или продолжить работу от `codex/weekend-integration`;
-2. начать ветку `codex/runtime-boundary-contract`;
-3. работать по `development/branches/01-runtime-boundary-contract/task.md`.
+в файле `development/STATUS.md`.
 
 ## Как интерпретировать структуру `development/`
 
@@ -106,7 +108,8 @@ Step 0 завершён:
 
 1. импортировать bundle;
 2. открыть этот файл;
-3. пройти read-order выше;
-4. создать `codex/weekend-integration`;
-5. запускать writer-agent по одному `task.md` за раз;
-6. после каждой ветки требовать handoff и только потом делать merge.
+3. перейти в `development/STATUS.md`;
+4. пройти read-order выше;
+5. продолжить от `codex/weekend-integration` и task-pack, указанных в status-файле;
+6. запускать writer-agent по одному `task.md` за раз;
+7. после каждой ветки требовать handoff и только потом делать merge.
