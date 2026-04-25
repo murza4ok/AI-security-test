@@ -52,7 +52,7 @@ pub async fn run_classic_payloads(
                         )
                         .await;
 
-                    let (response_text, latency_ms, tokens_used, evaluation, model_used) =
+                    let (response_text, latency_ms, tokens_used, evaluation, model_used, provider_failed) =
                         match response {
                             Ok(response) => {
                                 let latency_ms = started_at.elapsed().as_millis() as u64;
@@ -66,6 +66,7 @@ pub async fn run_classic_payloads(
                                     tokens_used,
                                     evaluation,
                                     Some(response.model),
+                                    false,
                                 )
                             }
                             Err(error) => (
@@ -74,6 +75,7 @@ pub async fn run_classic_payloads(
                                 None,
                                 EvaluationResult::Inconclusive,
                                 None,
+                                true,
                             ),
                         };
 
@@ -94,6 +96,12 @@ pub async fn run_classic_payloads(
                     if evaluation_rank(&evaluation) >= evaluation_rank(&best_evaluation) {
                         best_evaluation = evaluation;
                         best_turn_index = turn_index;
+                    }
+
+                    if provider_failed {
+                        chain_abort_reason =
+                            Some(format!("provider error on step {}", turn_index + 1));
+                        break;
                     }
 
                     if !turn.continue_if_response_contains.is_empty()
@@ -403,5 +411,57 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("response gate"));
+    }
+
+    #[tokio::test]
+    async fn provider_error_stops_chain_early() {
+        struct FailingProvider;
+
+        #[async_trait]
+        impl LLMProvider for FailingProvider {
+            fn name(&self) -> &str {
+                "failing"
+            }
+
+            fn id(&self) -> &str {
+                "failing"
+            }
+
+            fn configured_model(&self) -> &str {
+                "failing-model"
+            }
+
+            fn supports_system_prompt(&self) -> bool {
+                true
+            }
+
+            async fn complete(
+                &self,
+                _system_prompt: Option<&str>,
+                _user_message: &str,
+                _config: &RequestConfig,
+            ) -> Result<LLMResponse, ProviderError> {
+                Err(ProviderError::NotConfigured)
+            }
+
+            async fn health_check(&self) -> Result<(), ProviderError> {
+                Ok(())
+            }
+        }
+
+        let config = AttackConfig::default();
+        let results = run_classic_payloads(&FailingProvider, &[chain_payload()], &config, &|_| {})
+            .await
+            .expect("classic chain should record provider error");
+
+        assert_eq!(results[0].transcript.len(), 1);
+        assert_eq!(results[0].chain_executed_turns, 1);
+        assert!(!results[0].chain_completed);
+        assert!(results[0]
+            .chain_abort_reason
+            .as_deref()
+            .unwrap_or_default()
+            .contains("provider error"));
+        assert!(results[0].response_received.starts_with("ERROR:"));
     }
 }
