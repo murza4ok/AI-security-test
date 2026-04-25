@@ -413,9 +413,16 @@ Residual note:
 
 Статус:
 - completed
+- merged into `codex/weekend-integration`
 
 Feature branch:
 - `codex/integration-smoke`
+
+Feature commit:
+- `bdc4509`
+
+Integration merge:
+- `743e4dd`
 
 Что сделано:
 - собрана итоговая интеграционная ветка поверх merge-результата `01`–`10` без новых feature-изменений;
