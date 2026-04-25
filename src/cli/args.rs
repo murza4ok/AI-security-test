@@ -9,8 +9,8 @@ use std::path::PathBuf;
 #[command(
     name = "ai-sec",
     about = "CLI-инструмент для тестирования безопасности LLM и LLM-приложений",
-    long_about = "ai-sec помогает исследовать уязвимости LLM, проводить сценарные red-team прогоны, запускать генеративные атаки и сравнивать результаты между моделями и провайдерами.\nИнструмент предназначен только для учебного и авторизованного тестирования.",
-    after_help = "Быстрые примеры:\n  ai-sec list\n  ai-sec run --attack jailbreaking --provider deepseek\n  ai-sec run --attack prompt_injection --provider deepseek --generated 3\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot\n  ai-sec sessions\n\nДополнительно:\n  ai-sec help run",
+    long_about = "ai-sec помогает исследовать уязвимости LLM, проводить сценарные red-team прогоны, запускать генеративные атаки и сравнивать результаты между моделями и провайдерами.\nЗапуск без подкоманды открывает интерактивное меню.\nИнструмент предназначен только для учебного и авторизованного тестирования.",
+    after_help = "Запуск из корня репозитория:\n  cargo run --bin ai-sec -- --help\n  cargo run --bin ai-sec -- list\n  cargo run --bin ai-sec -- run --attack jailbreaking --provider deepseek\n  cargo run --bin ai-sec -- check --provider ollama\n  cargo run --bin ai-sec -- compare\n\nБыстрые примеры для уже собранного бинаря:\n  ai-sec sessions\n  ai-sec review results/<file>.json\n\nДополнительно:\n  ai-sec help run",
     version
 )]
 pub struct Cli {
@@ -30,18 +30,18 @@ pub struct Cli {
 pub enum Commands {
     /// Запустить одну или несколько категорий атак
     #[command(
-        after_help = "Примеры:\n  ai-sec run --attack prompt_injection --provider deepseek\n  ai-sec run --attack prompt_injection --provider deepseek --generated 3\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot --limit 5\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario internal_rag_bot --retrieval-mode subset"
+        after_help = "Примеры:\n  ai-sec run --attack prompt_injection --provider deepseek\n  ai-sec run --attack prompt_injection --provider deepseek --generated 3\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot --limit 5\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario internal_rag_bot --retrieval-mode subset\n  ai-sec run --attack prompt_injection --target-mode http --target-base-url http://127.0.0.1:3000 --target-user customer_alice --target-profile naive\n\nЗамечания:\n  --app-scenario обязателен только для sensitive_data_exposure\n  --output используется только при запуске через один провайдер или одну HTTP-цель\n  HTTP mode требует --target-mode http и полный набор --target-base-url/--target-user/--target-profile"
     )]
     Run {
         /// ID категории атаки: jailbreaking, prompt_injection, sensitive_data_exposure
         #[arg(short, long, required = true)]
         attack: Vec<String>,
 
-        /// Override имени модели для этого запуска
+        /// Override имени модели для этого запуска; при нескольких провайдерах требует --provider
         #[arg(short, long)]
         model: Option<String>,
 
-        /// Сохранить JSON-отчёт в указанный файл
+        /// Сохранить JSON-отчёт в указанный файл при запуске через один провайдер
         #[arg(short, long)]
         output: Option<PathBuf>,
 
@@ -76,27 +76,49 @@ pub enum Commands {
         /// Детерминированный seed для сборки сценария
         #[arg(long)]
         session_seed: Option<String>,
+
+        /// Режим цели: сейчас поддерживается только http
+        #[arg(long)]
+        target_mode: Option<String>,
+
+        /// Base URL внешней HTTP-цели, например http://127.0.0.1:3000
+        #[arg(long)]
+        target_base_url: Option<String>,
+
+        /// Demo-user для login flow внешней HTTP-цели
+        #[arg(long)]
+        target_user: Option<String>,
+
+        /// Security profile внешней HTTP-цели: naive, segmented, guarded
+        #[arg(long)]
+        target_profile: Option<String>,
     },
 
     /// Показать доступные категории атак и число payload-ов
     List,
 
     /// Показать обучающее описание категории атаки
+    #[command(after_help = "Пример:\n  ai-sec explain jailbreaking")]
     Explain {
         /// ID категории атаки
         attack: String,
     },
 
     /// Проверить доступность и конфигурацию провайдеров
+    #[command(after_help = "Примеры:\n  ai-sec check\n  ai-sec check --provider ollama")]
     Check,
 
     /// Открыть сохранённый JSON-отчёт в review-режиме
+    #[command(after_help = "Пример:\n  ai-sec review results/2026-04-02_14-30-00_ollama.json")]
     Review {
         /// Путь к JSON-отчёту, например results/2026-04-02_14-30.json
         file: PathBuf,
     },
 
     /// Сравнить несколько сессий между собой
+    #[command(
+        after_help = "Примеры:\n  ai-sec compare results/file1.json results/file2.json\n  ai-sec compare\n\nЕсли файлы не указаны, команда сравнит все JSON-отчёты из results/."
+    )]
     Compare {
         /// JSON-отчёты для сравнения; если не указаны, будут загружены все файлы из results/
         #[arg(value_name = "FILE")]
@@ -104,6 +126,7 @@ pub enum Commands {
     },
 
     /// Показать обзор сохранённых сессий в results/
+    #[command(after_help = "Пример:\n  ai-sec sessions")]
     Sessions,
 }
 
@@ -189,6 +212,10 @@ mod tests {
                 retrieval_mode,
                 tenant,
                 session_seed,
+                target_mode,
+                target_base_url,
+                target_user,
+                target_profile,
                 ..
             }) => {
                 assert_eq!(attack, vec!["sensitive_data_exposure"]);
@@ -196,6 +223,46 @@ mod tests {
                 assert_eq!(retrieval_mode.as_deref(), Some("subset"));
                 assert_eq!(tenant.as_deref(), Some("tenant-a"));
                 assert_eq!(session_seed.as_deref(), Some("demo"));
+                assert_eq!(target_mode, None);
+                assert_eq!(target_base_url, None);
+                assert_eq!(target_user, None);
+                assert_eq!(target_profile, None);
+            }
+            other => panic!("unexpected command: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn run_command_parses_http_target_flags() {
+        let cli = Cli::parse_from([
+            "ai-sec",
+            "run",
+            "--attack",
+            "prompt_injection",
+            "--target-mode",
+            "http",
+            "--target-base-url",
+            "http://127.0.0.1:3000",
+            "--target-user",
+            "customer_alice",
+            "--target-profile",
+            "naive",
+        ]);
+
+        match cli.command {
+            Some(Commands::Run {
+                attack,
+                target_mode,
+                target_base_url,
+                target_user,
+                target_profile,
+                ..
+            }) => {
+                assert_eq!(attack, vec!["prompt_injection"]);
+                assert_eq!(target_mode.as_deref(), Some("http"));
+                assert_eq!(target_base_url.as_deref(), Some("http://127.0.0.1:3000"));
+                assert_eq!(target_user.as_deref(), Some("customer_alice"));
+                assert_eq!(target_profile.as_deref(), Some("naive"));
             }
             other => panic!("unexpected command: {:?}", other),
         }

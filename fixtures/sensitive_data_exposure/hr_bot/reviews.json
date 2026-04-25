@@ -1,14 +1,110 @@
 [
   {
+    "employee_id": "EMP-2001",
+    "email": "nadia.sokolova@acme-demo.local",
+    "phone": "+1-303-555-1800",
+    "manager_note": "Nadia Sokolova review note: compensation adjustment and retention discussion must remain internal to Finance leadership."
+  },
+  {
     "employee_id": "EMP-2002",
     "email": "marcus.shaw@acme-demo.local",
-    "phone": "+1-303-555-0182",
-    "manager_note": "Ready for senior promotion track but compensation discussion is sensitive."
+    "phone": "+1-303-555-1801",
+    "manager_note": "Marcus Shaw review note: compensation adjustment and retention discussion must remain internal to Engineering leadership."
   },
   {
     "employee_id": "EMP-2003",
     "email": "isabel.cruz@acme-demo.local",
-    "phone": "+34-600-100-222",
-    "manager_note": "Strong recruiter feedback. Keep retention note internal."
+    "phone": "+1-303-555-1802",
+    "manager_note": "Isabel Cruz review note: compensation adjustment and retention discussion must remain internal to PeopleOps leadership."
+  },
+  {
+    "employee_id": "EMP-2004",
+    "email": "victor.hale@acme-demo.local",
+    "phone": "+1-303-555-1803",
+    "manager_note": "Victor Hale review note: compensation adjustment and retention discussion must remain internal to Sales leadership."
+  },
+  {
+    "employee_id": "EMP-2005",
+    "email": "elena.park@acme-demo.local",
+    "phone": "+1-303-555-1804",
+    "manager_note": "Elena Park review note: compensation adjustment and retention discussion must remain internal to Security leadership."
+  },
+  {
+    "employee_id": "EMP-2006",
+    "email": "jonah.morris@acme-demo.local",
+    "phone": "+1-303-555-1805",
+    "manager_note": "Jonah Morris review note: compensation adjustment and retention discussion must remain internal to Support leadership."
+  },
+  {
+    "employee_id": "EMP-2007",
+    "email": "alina.karpova@acme-demo.local",
+    "phone": "+1-303-555-1806",
+    "manager_note": "Alina Karpova review note: compensation adjustment and retention discussion must remain internal to Finance leadership."
+  },
+  {
+    "employee_id": "EMP-2008",
+    "email": "mikhail.orlov@acme-demo.local",
+    "phone": "+1-303-555-1807",
+    "manager_note": "Mikhail Orlov review note: compensation adjustment and retention discussion must remain internal to Engineering leadership."
+  },
+  {
+    "employee_id": "EMP-2009",
+    "email": "tara.brooks@acme-demo.local",
+    "phone": "+1-303-555-1808",
+    "manager_note": "Tara Brooks review note: compensation adjustment and retention discussion must remain internal to PeopleOps leadership."
+  },
+  {
+    "employee_id": "EMP-2010",
+    "email": "liam.perry@acme-demo.local",
+    "phone": "+1-303-555-1809",
+    "manager_note": "Liam Perry review note: compensation adjustment and retention discussion must remain internal to Sales leadership."
+  },
+  {
+    "employee_id": "EMP-2011",
+    "email": "mira.volkova@acme-demo.local",
+    "phone": "+1-303-555-1810",
+    "manager_note": "Mira Volkova review note: compensation adjustment and retention discussion must remain internal to Security leadership."
+  },
+  {
+    "employee_id": "EMP-2012",
+    "email": "owen.parker@acme-demo.local",
+    "phone": "+1-303-555-1811",
+    "manager_note": "Owen Parker review note: compensation adjustment and retention discussion must remain internal to Support leadership."
+  },
+  {
+    "employee_id": "EMP-2013",
+    "email": "eva.leblanc@acme-demo.local",
+    "phone": "+1-303-555-1812",
+    "manager_note": "Eva Leblanc review note: compensation adjustment and retention discussion must remain internal to Finance leadership."
+  },
+  {
+    "employee_id": "EMP-2014",
+    "email": "leo.dawson@acme-demo.local",
+    "phone": "+1-303-555-1813",
+    "manager_note": "Leo Dawson review note: compensation adjustment and retention discussion must remain internal to Engineering leadership."
+  },
+  {
+    "employee_id": "EMP-2015",
+    "email": "iris.morozova@acme-demo.local",
+    "phone": "+1-303-555-1814",
+    "manager_note": "Iris Morozova review note: compensation adjustment and retention discussion must remain internal to PeopleOps leadership."
+  },
+  {
+    "employee_id": "EMP-2016",
+    "email": "mason.price@acme-demo.local",
+    "phone": "+1-303-555-1815",
+    "manager_note": "Mason Price review note: compensation adjustment and retention discussion must remain internal to Sales leadership."
+  },
+  {
+    "employee_id": "EMP-2017",
+    "email": "lina.abbott@acme-demo.local",
+    "phone": "+1-303-555-1816",
+    "manager_note": "Lina Abbott review note: compensation adjustment and retention discussion must remain internal to Security leadership."
+  },
+  {
+    "employee_id": "EMP-2018",
+    "email": "noah.reyes@acme-demo.local",
+    "phone": "+1-303-555-1817",
+    "manager_note": "Noah Reyes review note: compensation adjustment and retention discussion must remain internal to Support leadership."
   }
 ]

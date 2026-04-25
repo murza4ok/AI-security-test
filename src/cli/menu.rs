@@ -9,24 +9,66 @@ use crate::attacks::registry::all_attacks;
 use anyhow::Result;
 use dialoguer::{theme::ColorfulTheme, MultiSelect, Select};
 
-/// Top-level menu choices
-const MENU_ITEMS: &[&str] = &[
-    "Run All Attacks",
-    "Select Attack Categories",
-    "Configure Provider (edit .env)",
+pub enum MainMenuAction {
+    RunAllAttacks,
+    RunSelectedAttacks,
+    ProviderSetupHint,
+    BrowseSavedSessions,
+    LearnAttackFamilies,
+    Quit,
+}
+
+/// Top-level menu choices when at least one provider is configured.
+const MENU_ITEMS_WITH_PROVIDERS: &[&str] = &[
+    "Run All Attacks On Configured Providers",
+    "Run Selected Attack Categories",
+    "Provider Setup Hint (.env)",
     "Browse Saved Sessions",
-    "Educational Mode — Learn About Attacks",
+    "Learn About Attack Families",
     "Quit",
 ];
 
-/// Present the main menu and return the selected action index.
-pub fn show_main_menu() -> Result<usize> {
+/// Top-level menu choices when attack runs are unavailable.
+const MENU_ITEMS_WITHOUT_PROVIDERS: &[&str] = &[
+    "Provider Setup Hint (.env)",
+    "Browse Saved Sessions",
+    "Learn About Attack Families",
+    "Quit",
+];
+
+/// Present the main menu and return the selected action.
+pub fn show_main_menu(providers_available: bool) -> Result<MainMenuAction> {
+    let items = if providers_available {
+        MENU_ITEMS_WITH_PROVIDERS
+    } else {
+        MENU_ITEMS_WITHOUT_PROVIDERS
+    };
+
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Main Menu")
-        .items(MENU_ITEMS)
+        .items(items)
         .default(0)
         .interact()?;
-    Ok(selection)
+
+    let action = if providers_available {
+        match selection {
+            0 => MainMenuAction::RunAllAttacks,
+            1 => MainMenuAction::RunSelectedAttacks,
+            2 => MainMenuAction::ProviderSetupHint,
+            3 => MainMenuAction::BrowseSavedSessions,
+            4 => MainMenuAction::LearnAttackFamilies,
+            _ => MainMenuAction::Quit,
+        }
+    } else {
+        match selection {
+            0 => MainMenuAction::ProviderSetupHint,
+            1 => MainMenuAction::BrowseSavedSessions,
+            2 => MainMenuAction::LearnAttackFamilies,
+            _ => MainMenuAction::Quit,
+        }
+    };
+
+    Ok(action)
 }
 
 /// Present attack category selection with checkboxes.
@@ -53,9 +95,7 @@ pub fn select_attack_categories() -> Result<Vec<String>> {
 /// Returns the provider ID string.
 pub fn select_provider(available: &[String]) -> Result<String> {
     if available.is_empty() {
-        anyhow::bail!(
-            "No providers configured. Copy .env.example to .env and add your API key."
-        );
+        anyhow::bail!("No providers configured. Copy .env.example to .env and add your API key.");
     }
 
     let selection = Select::with_theme(&ColorfulTheme::default())
@@ -80,7 +120,12 @@ pub fn confirm(prompt: &str) -> Result<bool> {
 
 /// Let the user choose how to work with saved sessions.
 pub fn select_saved_sessions_action() -> Result<usize> {
-    let items = &["Overview only", "Review one session", "Compare all sessions", "Back"];
+    let items = &[
+        "Overview only",
+        "Review one saved session",
+        "Compare all saved sessions",
+        "Back",
+    ];
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Saved sessions")
         .items(items)

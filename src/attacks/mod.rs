@@ -44,6 +44,21 @@ pub struct AttackResult {
     pub prompt_sent: String,
     /// Raw text received from the model
     pub response_received: String,
+    /// Step-by-step transcript captured during chain execution.
+    #[serde(default)]
+    pub transcript: Vec<TranscriptTurn>,
+    /// Number of turns defined for this payload.
+    #[serde(default)]
+    pub chain_planned_turns: usize,
+    /// Number of turns that were actually executed.
+    #[serde(default)]
+    pub chain_executed_turns: usize,
+    /// Whether the chain reached its planned final step.
+    #[serde(default)]
+    pub chain_completed: bool,
+    /// Why the chain stopped early, if it did.
+    #[serde(default)]
+    pub chain_abort_reason: Option<String>,
     /// How we evaluated this response
     pub evaluation: EvaluationResult,
     /// Wall-clock latency for this request
@@ -59,12 +74,83 @@ pub struct AttackResult {
     /// Seed payload id used to generate this payload, if applicable
     #[serde(default)]
     pub seed_payload_id: Option<String>,
+    /// Normalized confidence score for reviewer and benchmark tooling.
+    #[serde(default)]
+    pub confidence: f32,
+    /// Whether this result should be queued for human review.
+    #[serde(default)]
+    pub requires_review: bool,
+    /// Normalized rationale derived from the evaluator outcome.
+    #[serde(default)]
+    pub rationale: String,
     /// Standardized evidence attached to the result.
     #[serde(default)]
     pub evidence: AttackEvidence,
     /// Standardized damage assessment for the result.
     #[serde(default)]
     pub damage: DamageAssessment,
+}
+
+/// One executed turn in a multi-turn attack transcript.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TranscriptTurn {
+    pub step_index: usize,
+    pub user_message: String,
+    pub prompt_sent: String,
+    pub response_received: String,
+    #[serde(default)]
+    pub latency_ms: u64,
+    #[serde(default)]
+    pub tokens_used: Option<u32>,
+    #[serde(default)]
+    pub model_used: Option<String>,
+}
+
+impl AttackResult {
+    pub fn refresh_evaluation_metadata(&mut self) {
+        if self.transcript.is_empty()
+            && (!self.prompt_sent.is_empty() || !self.response_received.is_empty())
+        {
+            self.transcript.push(TranscriptTurn {
+                step_index: 1,
+                user_message: self.prompt_sent.clone(),
+                prompt_sent: self.prompt_sent.clone(),
+                response_received: self.response_received.clone(),
+                latency_ms: self.latency_ms,
+                tokens_used: self.tokens_used,
+                model_used: self.model_used.clone(),
+            });
+        }
+
+        if self.chain_planned_turns == 0 {
+            self.chain_planned_turns = self.transcript.len().max(1);
+        }
+        if self.chain_executed_turns == 0 {
+            self.chain_executed_turns = self.transcript.len().max(1);
+        }
+        if self.chain_abort_reason.is_none() {
+            self.chain_completed = self.chain_executed_turns >= self.chain_planned_turns;
+        }
+
+        if let Some(turn) = self.transcript.last() {
+            if self.prompt_sent.is_empty() {
+                self.prompt_sent = turn.prompt_sent.clone();
+            }
+            if self.response_received.is_empty() {
+                self.response_received = turn.response_received.clone();
+            }
+            if self.model_used.is_none() {
+                self.model_used = turn.model_used.clone();
+            }
+            if self.tokens_used.is_none() {
+                self.tokens_used = turn.tokens_used;
+            }
+        }
+
+        self.confidence = self.evaluation.confidence();
+        self.requires_review = self.evaluation.requires_review();
+        self.rationale = self.evaluation.rationale();
+    }
 }
 
 /// Configuration for a single attack run.
@@ -85,6 +171,16 @@ pub struct AttackConfig {
     pub generator_provider: Option<std::sync::Arc<dyn LLMProvider>>,
     /// Optional scenario-driven sensitive-data exposure configuration.
     pub scenario: Option<crate::scenarios::types::ScenarioRunConfig>,
+    /// How a multi-turn chain should feed prior context into the next request.
+    pub conversation_strategy: ConversationStrategy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConversationStrategy {
+    /// Rebuild prior transcript into the next prompt. Used for stateless providers.
+    PromptHistory,
+    /// Send only the next user message and rely on provider-side session state.
+    NativeSession,
 }
 
 impl Default for AttackConfig {
@@ -97,6 +193,7 @@ impl Default for AttackConfig {
             generation: None,
             generator_provider: None,
             scenario: None,
+            conversation_strategy: ConversationStrategy::PromptHistory,
         }
     }
 }

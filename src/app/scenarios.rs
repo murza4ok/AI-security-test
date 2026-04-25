@@ -1,4 +1,7 @@
-use crate::scenarios::types::{RetrievalMode, ScenarioRunConfig};
+use crate::scenarios::{
+    loader,
+    types::{RetrievalMode, ScenarioRunConfig},
+};
 use anyhow::Result;
 use std::path::PathBuf;
 
@@ -16,8 +19,9 @@ pub fn build_scenario_config(
 
     let retrieval_mode = retrieval_mode
         .map(|value| {
-            RetrievalMode::parse(value)
-                .ok_or_else(|| anyhow::anyhow!("Invalid retrieval mode '{}'. Use full or subset", value))
+            RetrievalMode::parse(value).ok_or_else(|| {
+                anyhow::anyhow!("Invalid retrieval mode '{}'. Use full or subset", value)
+            })
         })
         .transpose()?
         .unwrap_or_else(|| {
@@ -28,7 +32,7 @@ pub fn build_scenario_config(
             }
         });
 
-    Ok(Some(ScenarioRunConfig {
+    let mut config = ScenarioRunConfig {
         scenario_id: scenario_id.to_string(),
         fixture_root: fixture_root
             .cloned()
@@ -37,5 +41,9 @@ pub fn build_scenario_config(
         scenario_config_path: scenario_config.cloned(),
         tenant: tenant.map(str::to_string),
         session_seed: session_seed.map(str::to_string),
-    }))
+        loaded_definition: None,
+    };
+    config.loaded_definition = Some(std::sync::Arc::new(loader::load_scenario(&config)?));
+
+    Ok(Some(config))
 }

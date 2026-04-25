@@ -27,10 +27,16 @@ pub fn print_informational(msg: &str) {
 
 pub fn print_banner() {
     println!();
-    println!("{}", "==============================================".cyan());
+    println!(
+        "{}",
+        "==============================================".cyan()
+    );
     println!("{}", "AI SECURITY TESTING TOOL".cyan().bold());
     println!("{}", "Educational LLM Vulnerability Research".cyan());
-    println!("{}", "==============================================".cyan());
+    println!(
+        "{}",
+        "==============================================".cyan()
+    );
     println!();
 }
 
@@ -49,11 +55,41 @@ pub fn print_section(title: &str) {
 pub fn print_usage_hint() {
     println!("  {}", "Краткая справка".bold().bright_blue());
     println!();
-    println!("  {}  {}", "ai-sec run -a <category>".cyan(), "запустить одну или несколько атак");
-    println!("  {}     {}", "ai-sec list".cyan(), "показать доступные категории атак");
-    println!("  {}  {}", "ai-sec explain <id>".cyan(), "показать обучающее описание атаки");
-    println!("  {}    {}", "ai-sec check".cyan(), "проверить доступность провайдеров");
-    println!("  {} {}", "ai-sec sessions".cyan(), "показать обзор сохранённых сессий");
+    println!(
+        "  {}              {}",
+        "ai-sec".cyan(),
+        "открыть интерактивное меню"
+    );
+    println!(
+        "  {}  {}",
+        "ai-sec run -a <category>".cyan(),
+        "запустить одну или несколько атак"
+    );
+    println!(
+        "  {}     {}",
+        "ai-sec list".cyan(),
+        "показать доступные категории атак"
+    );
+    println!(
+        "  {}  {}",
+        "ai-sec explain <id>".cyan(),
+        "показать обучающее описание атаки"
+    );
+    println!(
+        "  {}    {}",
+        "ai-sec check".cyan(),
+        "проверить доступность провайдеров"
+    );
+    println!(
+        "  {} {}",
+        "ai-sec sessions".cyan(),
+        "показать обзор сохранённых сессий"
+    );
+    println!(
+        "  {} {}",
+        "ai-sec compare [files...]".cyan(),
+        "сравнить сохранённые сессии"
+    );
     println!();
     println!("  Категории:");
     println!("    prompt_injection  jailbreaking  extraction  goal_hijacking");
@@ -61,6 +97,7 @@ pub fn print_usage_hint() {
     println!("    sensitive_data_exposure");
     println!();
     println!("  Провайдер задаётся через `.env` или флаг `--provider`.");
+    println!("  Без настроенного провайдера доступны review/sessions/explain и меню-режим без запусков атак.");
     println!();
 }
 

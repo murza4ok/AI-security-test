@@ -68,6 +68,11 @@ comfy-table = "7"
 
 # Random payload selection for variation
 rand = "0.8"
+axum = { version = "0.7", features = ["form", "json", "macros"] }
+csv = "1"
 
 [dev-dependencies]
 tokio-test = "0.4"
+
+[patch.crates-io]
+comfy-table = { path = "vendor/comfy-table" }

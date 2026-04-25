@@ -7,6 +7,8 @@
 use async_trait::async_trait;
 use thiserror::Error;
 
+use crate::engine::session::TargetMetadata;
+
 /// Configuration for a single completion request.
 /// Passed to every `complete()` call so callers can tune behaviour per request.
 #[derive(Debug, Clone)]
@@ -83,14 +85,15 @@ pub trait LLMProvider: Send + Sync {
     fn configured_model(&self) -> &str;
 
     /// Whether this provider accepts a dedicated system prompt field.
-    /// If false, the system prompt is prepended to the user message.
+    /// The current provider layer passes system prompts natively for all
+    /// built-in providers; future integrations can use this capability bit
+    /// when adding non-chat transports.
     fn supports_system_prompt(&self) -> bool;
 
     /// Send a single completion request.
     ///
-    /// `system_prompt` is optional; if the provider doesn't support it
-    /// natively (`supports_system_prompt() == false`), it is prepended to
-    /// `user_message` automatically by the default wrapper below.
+    /// `system_prompt` is optional and forwarded according to the provider's
+    /// native request shape.
     async fn complete(
         &self,
         system_prompt: Option<&str>,
@@ -101,4 +104,9 @@ pub trait LLMProvider: Send + Sync {
     /// Verify that the provider is reachable and the credentials are valid.
     /// Used by `ai-sec check` before running attacks.
     async fn health_check(&self) -> Result<(), ProviderError>;
+
+    /// Return external target metadata, if this provider talks to a concrete app target.
+    fn target_metadata(&self) -> Option<TargetMetadata> {
+        None
+    }
 }

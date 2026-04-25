@@ -6,8 +6,7 @@ Cargo.lock
 .env
 .env.local
 
-# Personal session docs (gitignored by design — see docs/Rules.md)
-docs/
+# Documentation is part of the repository and must stay versioned.
 
 # IDE
 .idea/
@@ -29,3 +28,21 @@ buffer_for_ollama/
 # Local working files
 resume.md
 scripts/
+ROADMAP_SECOND_ARTICLE.md
+tables.md
+.codex
+.claude/
+
+# Local planning / LLM orchestration notes
+# Existing tracked files stay versioned until explicitly removed from the index.
+BUNDLE_START_HERE.md
+Branch_tasks.md
+Roadmap_weekend.md
+TZ.md
+Test_instruction.md
+refactoring.md
+prompts.md
+development/README.md
+development/STATUS.md
+development/branches/**/*.md
+Спецификация для технической задачи LLM..md

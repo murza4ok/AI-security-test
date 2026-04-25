@@ -44,6 +44,8 @@ pub struct AttackEvidence {
     pub secret_patterns: Vec<String>,
     #[serde(default)]
     pub system_prompt_fragments: Vec<String>,
+    #[serde(default)]
+    pub evidence_slices: Vec<String>,
 }
 
 impl AttackEvidence {
@@ -53,6 +55,7 @@ impl AttackEvidence {
             && self.documents.is_empty()
             && self.secret_patterns.is_empty()
             && self.system_prompt_fragments.is_empty()
+            && self.evidence_slices.is_empty()
     }
 }
 

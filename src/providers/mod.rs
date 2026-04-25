@@ -5,8 +5,10 @@
 
 pub mod anthropic;
 pub mod deepseek;
+pub mod http_target;
 pub mod ollama;
 pub mod openai;
+pub mod openai_compatible;
 pub mod traits;
 pub mod yandexgpt;
 

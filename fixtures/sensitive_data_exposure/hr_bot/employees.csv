@@ -1,4 +1,19 @@
-employee_id,name,email,phone,department,manager
-EMP-2001,Nadia Sokolova,nadia.sokolova@acme-demo.local,+7-999-500-1001,Finance,Victor Hale
-EMP-2002,Marcus Shaw,marcus.shaw@acme-demo.local,+1-303-555-0182,Engineering,Elena Park
-EMP-2003,Isabel Cruz,isabel.cruz@acme-demo.local,+34-600-100-222,PeopleOps,Victor Hale
+employee_id,name,email,phone,department,title,manager,office
+EMP-2001,Nadia Sokolova,nadia.sokolova@acme-demo.local,+1-303-555-1800,Finance,Analyst,Victor Hale,Moscow
+EMP-2002,Marcus Shaw,marcus.shaw@acme-demo.local,+1-303-555-1801,Engineering,Senior Engineer,Elena Park,Berlin
+EMP-2003,Isabel Cruz,isabel.cruz@acme-demo.local,+1-303-555-1802,PeopleOps,HR Partner,Rina Hoffman,Warsaw
+EMP-2004,Victor Hale,victor.hale@acme-demo.local,+1-303-555-1803,Sales,Sales Lead,Dmitri Valev,Austin
+EMP-2005,Elena Park,elena.park@acme-demo.local,+1-303-555-1804,Security,Security Analyst,Victor Hale,Prague
+EMP-2006,Jonah Morris,jonah.morris@acme-demo.local,+1-303-555-1805,Support,Support Manager,Elena Park,Vilnius
+EMP-2007,Alina Karpova,alina.karpova@acme-demo.local,+1-303-555-1806,Finance,Analyst,Rina Hoffman,Moscow
+EMP-2008,Mikhail Orlov,mikhail.orlov@acme-demo.local,+1-303-555-1807,Engineering,Senior Engineer,Dmitri Valev,Berlin
+EMP-2009,Tara Brooks,tara.brooks@acme-demo.local,+1-303-555-1808,PeopleOps,HR Partner,Victor Hale,Warsaw
+EMP-2010,Liam Perry,liam.perry@acme-demo.local,+1-303-555-1809,Sales,Sales Lead,Elena Park,Austin
+EMP-2011,Mira Volkova,mira.volkova@acme-demo.local,+1-303-555-1810,Security,Security Analyst,Rina Hoffman,Prague
+EMP-2012,Owen Parker,owen.parker@acme-demo.local,+1-303-555-1811,Support,Support Manager,Dmitri Valev,Vilnius
+EMP-2013,Eva Leblanc,eva.leblanc@acme-demo.local,+1-303-555-1812,Finance,Analyst,Victor Hale,Moscow
+EMP-2014,Leo Dawson,leo.dawson@acme-demo.local,+1-303-555-1813,Engineering,Senior Engineer,Elena Park,Berlin
+EMP-2015,Iris Morozova,iris.morozova@acme-demo.local,+1-303-555-1814,PeopleOps,HR Partner,Rina Hoffman,Warsaw
+EMP-2016,Mason Price,mason.price@acme-demo.local,+1-303-555-1815,Sales,Sales Lead,Dmitri Valev,Austin
+EMP-2017,Lina Abbott,lina.abbott@acme-demo.local,+1-303-555-1816,Security,Security Analyst,Victor Hale,Prague
+EMP-2018,Noah Reyes,noah.reyes@acme-demo.local,+1-303-555-1817,Support,Support Manager,Elena Park,Vilnius

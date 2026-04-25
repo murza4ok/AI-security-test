@@ -1,4 +1,4 @@
-use crate::app::{providers, scenarios};
+use crate::app::{providers, scenarios, target};
 use crate::attacks;
 use crate::cli::display;
 use crate::config;
@@ -58,6 +58,7 @@ pub async fn run_all_providers(
     limit: Option<usize>,
     generated: Option<usize>,
     scenario: Option<app_scenarios::types::ScenarioRunConfig>,
+    target: Option<target::HttpTargetConfig>,
 ) -> Result<()> {
     for provider in providers_list {
         let session = run_attacks_and_display(
@@ -68,6 +69,7 @@ pub async fn run_all_providers(
             limit,
             generated,
             scenario.clone(),
+            target.clone(),
         )
         .await?;
 
@@ -88,6 +90,7 @@ pub async fn run_attacks_and_display(
     limit: Option<usize>,
     generated: Option<usize>,
     scenario: Option<app_scenarios::types::ScenarioRunConfig>,
+    target: Option<target::HttpTargetConfig>,
 ) -> Result<Option<engine::session::TestSession>> {
     if selected.is_empty() {
         println!("  No attacks to run.");
@@ -102,15 +105,24 @@ pub async fn run_attacks_and_display(
     let current_category = std::sync::Mutex::new(String::new());
 
     let on_result = |attack_id: &str, result: &attacks::AttackResult| {
-        let mut current = current_category.lock().unwrap();
-        if current.as_str() != attack_id {
-            *current = attack_id.to_string();
+        let should_print_section = match current_category.lock() {
+            Ok(mut current) => {
+                if current.as_str() == attack_id {
+                    false
+                } else {
+                    *current = attack_id.to_string();
+                    true
+                }
+            }
+            Err(_) => true,
+        };
+
+        if should_print_section {
             let name = attacks::registry::find_attack(attack_id)
                 .map(|attack| attack.name().to_string())
                 .unwrap_or_else(|| attack_id.to_string());
             display::print_section(&name);
         }
-        drop(current);
 
         match result.evaluation.label() {
             "REFUSED" => display::print_refused(&result.payload_name),
@@ -136,14 +148,24 @@ pub async fn run_attacks_and_display(
     let mut attack_config = attacks::AttackConfig::default();
     attack_config.max_payloads = limit;
     attack_config.concurrency = app_config.request.concurrency;
+    attack_config.conversation_strategy = if target.is_some() {
+        attacks::ConversationStrategy::NativeSession
+    } else {
+        attacks::ConversationStrategy::PromptHistory
+    };
     attack_config.request_config = crate::providers::RequestConfig {
         temperature: 0.7,
         max_tokens: 1024,
     };
 
-    if let Some(variants_per_attack) = generated.filter(|count| *count > 0) {
+    let effective_generated_variants = generated
+        .filter(|count| *count > 0)
+        .map(|count| limit.map(|max| max.min(count)).unwrap_or(count))
+        .unwrap_or(0);
+
+    if effective_generated_variants > 0 {
         attack_config.generation = Some(generator::GenerationConfig::with_defaults(
-            variants_per_attack,
+            effective_generated_variants,
         ));
         attack_config.generator_provider = Some(
             providers::build_generation_provider(app_config, None).context(
@@ -153,7 +175,7 @@ pub async fn run_attacks_and_display(
     }
     attack_config.scenario = scenario.clone();
 
-    let session = runner
+    let mut session = runner
         .run_session(
             &selected,
             provider,
@@ -167,7 +189,7 @@ pub async fn run_attacks_and_display(
                 retry_max_attempts: app_config.request.retry_max_attempts,
                 retry_base_delay_ms: app_config.request.retry_base_delay.as_millis() as u64,
                 retry_max_delay_ms: app_config.request.retry_max_delay.as_millis() as u64,
-                generated_variants_per_attack: generated.unwrap_or(0),
+                generated_variants_per_attack: effective_generated_variants,
                 generator_provider: attack_config
                     .generator_provider
                     .as_ref()
@@ -186,15 +208,61 @@ pub async fn run_attacks_and_display(
         )
         .await?;
 
+    if let Some(target_metadata) = provider.target_metadata() {
+        session.target = target_metadata;
+    } else if let Some(target) = target {
+        session.target.mode = Some("http".to_string());
+        session.target.base_url = Some(target.base_url);
+        session.target.endpoint = Some("/api/chat".to_string());
+        session.target.authenticated_user = Some(target.username);
+        session.target.security_profile = Some(target.profile);
+        session.target.session_persistence = Some("cookie".to_string());
+    }
+
     if let Some(scenario) = scenario {
-        let definition = app_scenarios::loader::load_scenario(&scenario)?;
-        let mut session = session;
+        let definition = app_scenarios::loader::resolve_scenario_definition(&scenario)?;
         session.scenario.scenario_id = Some(definition.manifest.id.clone());
         session.scenario.scenario_name = Some(definition.manifest.name.clone());
         session.scenario.scenario_type = Some(definition.manifest.scenario_type.clone());
+        session.scenario.scenario_version = Some(definition.manifest.version.clone());
+        session.scenario.defense_profile = definition.manifest.defense_profile.clone();
+        session.scenario.context_mode = Some(definition.manifest.context.mode.clone());
+        session.scenario.retrieval_mode = Some(match scenario.retrieval_mode {
+            app_scenarios::types::RetrievalMode::Full => "full".to_string(),
+            app_scenarios::types::RetrievalMode::Subset => "subset".to_string(),
+        });
+        session.scenario.tenant = scenario.tenant.clone();
+        session.scenario.session_seed = scenario.session_seed.clone();
+        session.scenario.session_seed_status = Some(app_scenarios::builder::session_seed_status(
+            definition.as_ref(),
+            &scenario,
+        ));
+        session.scenario.active_schema_fields = app_scenarios::builder::active_schema_fields();
+        session.scenario.report_only_schema_fields =
+            app_scenarios::builder::report_only_schema_fields();
         session.scenario.sensitive_assets_count =
             definition.hidden_assets.len() + definition.retrieval_assets.len();
         session.scenario.canary_count = definition.canaries.len();
+        let mut real_envelopes = Vec::new();
+        let mut meta_envelopes = Vec::new();
+        for run in &session.attacks_run {
+            if run.attack_id != "sensitive_data_exposure" {
+                continue;
+            }
+            for result in &run.results {
+                let (real_envelope, meta_envelope) = app_scenarios::builder::build_report_envelopes(
+                    definition.as_ref(),
+                    &scenario,
+                    &result.payload_id,
+                    &result.payload_name,
+                    &result.prompt_sent,
+                );
+                real_envelopes.push(real_envelope);
+                meta_envelopes.push(meta_envelope);
+            }
+        }
+        session.scenario.real_envelopes = real_envelopes;
+        session.scenario.meta_envelopes = meta_envelopes;
         reporting::terminal_report::print_session_summary(&session);
         return Ok(Some(session));
     }
@@ -291,12 +359,13 @@ pub async fn run_command(
             scenario_config,
             tenant,
             session_seed,
+            target_mode,
+            target_base_url,
+            target_user,
+            target_profile,
         } => {
             display::print_banner();
             display::print_disclaimer();
-
-            let providers_list =
-                providers::build_all_providers(&cli.provider, model.as_deref(), &app_config)?;
             let loader = payloads::loader::PayloadLoader::new("payloads");
 
             let selected: Vec<Arc<dyn attacks::Attack>> = attack
@@ -314,13 +383,38 @@ pub async fn run_command(
                 anyhow::bail!("No valid attack IDs. Use 'ai-sec list' to see available options.");
             }
 
+            let target = target::build_http_target_config(
+                target_mode.as_deref(),
+                target_base_url.as_deref(),
+                target_user.as_deref(),
+                target_profile.as_deref(),
+            )?;
+            if target.is_some() {
+                if cli.provider.is_some() {
+                    anyhow::bail!("HTTP target mode does not use --provider");
+                }
+                if model.is_some() {
+                    anyhow::bail!("HTTP target mode does not use --model");
+                }
+                if app_scenario.is_some()
+                    || fixture_root.is_some()
+                    || retrieval_mode.is_some()
+                    || scenario_config.is_some()
+                    || tenant.is_some()
+                    || session_seed.is_some()
+                {
+                    anyhow::bail!("HTTP target mode does not support scenario-specific flags");
+                }
+            }
+
             let includes_sensitive_data_exposure = selected
                 .iter()
                 .any(|selected_attack| selected_attack.id() == "sensitive_data_exposure");
-            if includes_sensitive_data_exposure && app_scenario.is_none() {
-                anyhow::bail!(
-                    "--app-scenario is required when running sensitive_data_exposure"
-                );
+            if includes_sensitive_data_exposure && target.is_none() && app_scenario.is_none() {
+                anyhow::bail!("--app-scenario is required when running sensitive_data_exposure");
+            }
+            if includes_sensitive_data_exposure && target.is_some() {
+                anyhow::bail!("sensitive_data_exposure is not supported in HTTP target mode");
             }
 
             let scenario = scenarios::build_scenario_config(
@@ -331,6 +425,25 @@ pub async fn run_command(
                 tenant.as_deref(),
                 session_seed.as_deref(),
             )?;
+
+            let providers_list: Vec<Arc<dyn LLMProvider>> =
+                if let Some(target_config) = target.as_ref() {
+                    vec![
+                        Arc::new(crate::providers::http_target::HttpTargetProvider::new(
+                            target_config.base_url.clone(),
+                            target_config.username.clone(),
+                            target_config.profile.clone(),
+                            app_config.request.timeout,
+                            crate::providers::RetrySettings {
+                                max_attempts: app_config.request.retry_max_attempts,
+                                base_delay: app_config.request.retry_base_delay,
+                                max_delay: app_config.request.retry_max_delay,
+                            },
+                        )) as Arc<dyn LLMProvider>,
+                    ]
+                } else {
+                    providers::build_all_providers(&cli.provider, model.as_deref(), &app_config)?
+                };
 
             if output.is_some() && providers_list.len() > 1 {
                 eprintln!(
@@ -348,6 +461,7 @@ pub async fn run_command(
                     limit,
                     generated,
                     scenario.clone(),
+                    target.clone(),
                 )
                 .await?;
 
