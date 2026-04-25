@@ -50,10 +50,12 @@ cargo run --bin ai-sec -- run \
 
 Generated mode можно комбинировать с HTTP mode, если настроен generator provider для мутаций payload-ов.
 
+Multi-turn chains тоже поддержаны, если payload описан через `[[payloads.turns]]` и содержит от `2` до `5` шагов. В HTTP mode `ai-sec` отправляет только текущий user turn, а история разговора живёт на стороне `web_target` через session cookie.
+
 ## Ограничения
 
 - `sensitive_data_exposure` не поддерживается в HTTP mode;
 - scenario-specific флаги (`--app-scenario`, `--fixture-root`, `--retrieval-mode`, `--scenario-config`, `--tenant`, `--session-seed`) в HTTP mode запрещены;
 - `--provider` и `--model` в HTTP mode не используются;
 - tenant не извлекается из текущего внешнего API `web_target`, поэтому в report остаётся `null`, если цель явно его не возвращает;
-- multi-turn chain logic ещё не реализована в этом режиме.
+- transcript атаки и transcript самого web-target — это разные уровни состояния; текущий report хранит transcript со стороны `ai-sec`, а не HTML transcript страницы `/chat`.

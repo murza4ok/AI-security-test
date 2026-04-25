@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const REPORT_SCHEMA_VERSION: u32 = 4;
+pub const REPORT_SCHEMA_VERSION: u32 = 5;
 
 /// Scenario-level metadata for synthetic sensitive-data exposure runs.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -397,6 +397,11 @@ mod tests {
             payload_name: "name".to_string(),
             prompt_sent: "prompt".to_string(),
             response_received: "response".to_string(),
+            transcript: Vec::new(),
+            chain_planned_turns: 1,
+            chain_executed_turns: 1,
+            chain_completed: true,
+            chain_abort_reason: None,
             evaluation: EvaluationResult::Inconclusive,
             latency_ms: 10,
             tokens_used: Some(15),
@@ -425,6 +430,7 @@ mod tests {
         assert!(result.generated);
         assert_eq!(result.seed_payload_id.as_deref(), Some("seed"));
         assert_eq!(result.damage.score, 20);
+        assert_eq!(result.chain_executed_turns, 1);
     }
 
     #[test]
@@ -448,6 +454,11 @@ mod tests {
                 payload_name: "name".to_string(),
                 prompt_sent: "prompt".to_string(),
                 response_received: "response".to_string(),
+                transcript: Vec::new(),
+                chain_planned_turns: 1,
+                chain_executed_turns: 1,
+                chain_completed: true,
+                chain_abort_reason: None,
                 evaluation: EvaluationResult::Partial {
                     notes: "Needs manual review".to_string(),
                 },
@@ -468,6 +479,7 @@ mod tests {
         assert!(run.results[0].requires_review);
         assert!(run.results[0].confidence > 0.0);
         assert!(run.results[0].rationale.contains("manual review"));
+        assert_eq!(run.results[0].transcript.len(), 1);
     }
 
     #[test]

@@ -67,7 +67,11 @@ pub struct Payload {
     /// What this payload tests
     pub description: String,
     /// The actual prompt text to send to the LLM
+    #[serde(default)]
     pub prompt: String,
+    /// Optional multi-turn chain for this payload.
+    #[serde(default)]
+    pub turns: Vec<PayloadTurn>,
     /// Keywords whose presence in the response suggests the model refused
     #[serde(default)]
     pub expected_refusal_keywords: Vec<String>,
@@ -88,6 +92,19 @@ pub struct Payload {
     /// Seed payload id used to generate this payload
     #[serde(default)]
     pub seed_payload_id: Option<String>,
+}
+
+/// One user turn inside a multi-turn payload chain.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PayloadTurn {
+    /// Optional step label used in docs and debugging.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Logical user message for this step.
+    pub prompt: String,
+    /// Optional gate for continuing to the next step.
+    #[serde(default)]
+    pub continue_if_response_contains: Vec<String>,
 }
 
 /// Represents a fully parsed TOML payload file.
@@ -159,9 +176,10 @@ impl PayloadLoader {
                 if p.severity.is_none() {
                     p.severity = Some(file.metadata.severity.clone());
                 }
-                p
+                validate_payload_shape(&mut p, path)?;
+                Ok(p)
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(payloads)
     }
@@ -169,6 +187,51 @@ impl PayloadLoader {
     /// Return up to `count` payloads from the provided slice in stable order.
     pub fn sample_payloads(&self, payloads: &[Payload], count: usize) -> Vec<Payload> {
         payloads.iter().take(count).cloned().collect()
+    }
+}
+
+fn validate_payload_shape(payload: &mut Payload, path: &Path) -> Result<()> {
+    let has_prompt = !payload.prompt.trim().is_empty();
+    let has_turns = !payload.turns.is_empty();
+
+    match (has_prompt, has_turns) {
+        (false, false) => anyhow::bail!(
+            "Payload '{}' in {} must define either prompt or turns",
+            payload.id,
+            path.display()
+        ),
+        (true, false) => Ok(()),
+        (_, true) => {
+            let turn_count = payload.turns.len();
+            if !(2..=5).contains(&turn_count) {
+                anyhow::bail!(
+                    "Payload '{}' in {} must define between 2 and 5 turns",
+                    payload.id,
+                    path.display()
+                );
+            }
+
+            for (index, turn) in payload.turns.iter().enumerate() {
+                if turn.prompt.trim().is_empty() {
+                    anyhow::bail!(
+                        "Payload '{}' in {} has an empty turn {}",
+                        payload.id,
+                        path.display(),
+                        index + 1
+                    );
+                }
+            }
+
+            if !has_prompt {
+                payload.prompt = payload
+                    .turns
+                    .first()
+                    .map(|turn| turn.prompt.clone())
+                    .unwrap_or_default();
+            }
+
+            Ok(())
+        }
     }
 }
 
@@ -243,6 +306,7 @@ severity = "medium"
                 name: "First".to_string(),
                 description: "desc".to_string(),
                 prompt: "prompt".to_string(),
+                turns: Vec::new(),
                 expected_refusal_keywords: Vec::new(),
                 success_indicators: Vec::new(),
                 harm_level: HarmLevel::L1,
@@ -256,6 +320,7 @@ severity = "medium"
                 name: "Second".to_string(),
                 description: "desc".to_string(),
                 prompt: "prompt".to_string(),
+                turns: Vec::new(),
                 expected_refusal_keywords: Vec::new(),
                 success_indicators: Vec::new(),
                 harm_level: HarmLevel::L1,
@@ -273,5 +338,42 @@ severity = "medium"
             .collect();
 
         assert_eq!(sampled_ids, vec!["first", "second"]);
+    }
+
+    #[test]
+    fn load_file_supports_multi_turn_payloads() {
+        let root = unique_temp_dir();
+        let category_dir = root.join("demo");
+        fs::create_dir_all(&category_dir).expect("failed to create category dir");
+        let content = r#"[metadata]
+attack_type = "demo"
+variant = "chain"
+severity = "medium"
+
+[[payloads]]
+id = "chain-1"
+name = "Chain"
+description = "desc"
+success_indicators = ["secret"]
+
+[[payloads.turns]]
+prompt = "Turn one"
+
+[[payloads.turns]]
+prompt = "Turn two"
+continue_if_response_contains = ["continue"]
+"#;
+        fs::write(category_dir.join("chain.toml"), content).expect("failed to write payload file");
+
+        let loader = PayloadLoader::new(&root);
+        let payloads = loader
+            .load_category("demo")
+            .expect("failed to load payloads");
+
+        assert_eq!(payloads.len(), 1);
+        assert_eq!(payloads[0].prompt, "Turn one");
+        assert_eq!(payloads[0].turns.len(), 2);
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
     }
 }

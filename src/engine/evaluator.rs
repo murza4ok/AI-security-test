@@ -322,6 +322,7 @@ mod tests {
             name: "name".to_string(),
             description: "desc".to_string(),
             prompt: "prompt".to_string(),
+            turns: Vec::new(),
             expected_refusal_keywords: vec!["cannot".to_string()],
             success_indicators: vec!["shellcode".to_string(), "steps".to_string()],
             harm_level,
