@@ -92,6 +92,42 @@ impl AttackRun {
         for result in &mut self.results {
             result.refresh_evaluation_metadata();
         }
+        self.payloads_tested = self.results.len();
+        self.refused_count = self
+            .results
+            .iter()
+            .filter(|result| result.evaluation.is_refused())
+            .count();
+        self.success_count = self
+            .results
+            .iter()
+            .filter(|result| result.evaluation.is_success())
+            .count();
+        self.partial_count = self
+            .results
+            .iter()
+            .filter(|result| {
+                matches!(
+                    result.evaluation,
+                    crate::engine::evaluator::EvaluationResult::Partial { .. }
+                )
+            })
+            .count();
+        self.informational_count = self
+            .results
+            .iter()
+            .filter(|result| result.evaluation.is_informational())
+            .count();
+        self.inconclusive_count = self
+            .results
+            .iter()
+            .filter(|result| {
+                matches!(
+                    result.evaluation,
+                    crate::engine::evaluator::EvaluationResult::Inconclusive
+                )
+            })
+            .count();
         self.generated_payloads = self
             .results
             .iter()
@@ -137,6 +173,18 @@ impl SessionSummary {
         } else {
             (self.total_success as f32 / self.total_scoreable_payloads as f32) * 100.0
         };
+    }
+
+    pub fn recompute_from_runs(&mut self, runs: &[AttackRun]) {
+        self.total_payloads = runs.iter().map(|run| run.payloads_tested).sum();
+        self.total_refused = runs.iter().map(|run| run.refused_count).sum();
+        self.total_success = runs.iter().map(|run| run.success_count).sum();
+        self.total_partial = runs.iter().map(|run| run.partial_count).sum();
+        self.total_inconclusive = runs.iter().map(|run| run.inconclusive_count).sum();
+        self.total_informational = runs.iter().map(|run| run.informational_count).sum();
+        self.total_review_only = runs.iter().map(|run| run.review_only_count).sum();
+        self.total_generated_payloads = runs.iter().map(|run| run.generated_payloads).sum();
+        self.refresh_metrics();
     }
 }
 
@@ -266,14 +314,6 @@ impl TestSession {
     /// Add a completed attack run and update summary statistics.
     pub fn add_run(&mut self, mut run: AttackRun) {
         run.refresh_metrics();
-        self.summary.total_payloads += run.payloads_tested;
-        self.summary.total_refused += run.refused_count;
-        self.summary.total_success += run.success_count;
-        self.summary.total_partial += run.partial_count;
-        self.summary.total_inconclusive += run.inconclusive_count;
-        self.summary.total_informational += run.informational_count;
-        self.summary.total_review_only += run.review_only_count;
-        self.summary.total_generated_payloads += run.generated_payloads;
         self.attacks_run.push(run);
         self.refresh_metrics();
     }
@@ -291,12 +331,7 @@ impl TestSession {
         for run in &mut self.attacks_run {
             run.refresh_metrics();
         }
-        self.summary.total_generated_payloads = self
-            .attacks_run
-            .iter()
-            .map(|run| run.generated_payloads)
-            .sum();
-        self.summary.refresh_metrics();
+        self.summary.recompute_from_runs(&self.attacks_run);
         self.benchmark.attack_ids = self
             .attacks_run
             .iter()
@@ -330,6 +365,8 @@ impl TestSession {
         self.scenario.leaked_secret_types = leaked_secret_types.into_iter().collect();
         self.scenario.leaked_documents = leaked_documents.into_iter().collect();
         self.scenario.exposure_score = exposure_score;
+        dedupe_sorted(&mut self.scenario.active_schema_fields);
+        dedupe_sorted(&mut self.scenario.report_only_schema_fields);
     }
 }
 
@@ -363,7 +400,39 @@ mod tests {
             bypass_rate_pct: 0.0,
             generated_payloads: 0,
             duration_ms: 5,
-            results: Vec::new(),
+            results: vec![
+                sample_result(EvaluationResult::Refused {
+                    confidence: 0.9,
+                    matched_phrases: vec!["cannot".to_string()],
+                }),
+                sample_result(EvaluationResult::Refused {
+                    confidence: 0.9,
+                    matched_phrases: vec!["cannot".to_string()],
+                }),
+                sample_result(EvaluationResult::Refused {
+                    confidence: 0.9,
+                    matched_phrases: vec!["cannot".to_string()],
+                }),
+                sample_result(EvaluationResult::Success {
+                    confidence: 0.9,
+                    matched_phrases: vec!["secret".to_string()],
+                }),
+                sample_result(EvaluationResult::Success {
+                    confidence: 0.9,
+                    matched_phrases: vec!["secret".to_string()],
+                }),
+                sample_result(EvaluationResult::Partial {
+                    notes: "review".to_string(),
+                }),
+                sample_result(EvaluationResult::Partial {
+                    notes: "review".to_string(),
+                }),
+                sample_result(EvaluationResult::Partial {
+                    notes: "review".to_string(),
+                }),
+                sample_result(EvaluationResult::Informational),
+                sample_result(EvaluationResult::Informational),
+            ],
         };
 
         run.refresh_metrics();
@@ -507,12 +576,186 @@ mod tests {
             bypass_rate_pct: 0.0,
             generated_payloads: 0,
             duration_ms: 1,
-            results: Vec::new(),
+            results: vec![
+                sample_result(EvaluationResult::Refused {
+                    confidence: 0.9,
+                    matched_phrases: vec!["cannot".to_string()],
+                }),
+                sample_result(EvaluationResult::Success {
+                    confidence: 0.9,
+                    matched_phrases: vec!["secret".to_string()],
+                }),
+                sample_result(EvaluationResult::Partial {
+                    notes: "manual review".to_string(),
+                }),
+            ],
         });
 
         assert_eq!(session.schema_version, REPORT_SCHEMA_VERSION);
         assert_eq!(session.benchmark.attack_ids, vec!["jailbreaking"]);
         assert_eq!(session.benchmark.attack_count, 1);
         assert_eq!(session.benchmark.scoreable_payloads, 2);
+    }
+
+    #[test]
+    fn attack_run_refresh_overwrites_stale_counters_from_results() {
+        let mut run = AttackRun {
+            attack_id: "test".to_string(),
+            attack_name: "Test".to_string(),
+            payloads_tested: 99,
+            refused_count: 99,
+            success_count: 99,
+            partial_count: 99,
+            inconclusive_count: 99,
+            informational_count: 99,
+            review_only_count: 1,
+            scoreable_payloads: 0,
+            bypass_rate_pct: 0.0,
+            generated_payloads: 99,
+            duration_ms: 1,
+            results: vec![
+                AttackResult {
+                    payload_id: "refused".to_string(),
+                    payload_name: "refused".to_string(),
+                    prompt_sent: "p".to_string(),
+                    response_received: "r".to_string(),
+                    transcript: Vec::new(),
+                    chain_planned_turns: 1,
+                    chain_executed_turns: 1,
+                    chain_completed: true,
+                    chain_abort_reason: None,
+                    evaluation: EvaluationResult::Refused {
+                        confidence: 0.9,
+                        matched_phrases: vec!["cannot".to_string()],
+                    },
+                    latency_ms: 1,
+                    tokens_used: None,
+                    model_used: None,
+                    generated: false,
+                    seed_payload_id: None,
+                    confidence: 0.0,
+                    requires_review: false,
+                    rationale: String::new(),
+                    evidence: AttackEvidence::default(),
+                    damage: DamageAssessment::default(),
+                },
+                AttackResult {
+                    payload_id: "success".to_string(),
+                    payload_name: "success".to_string(),
+                    prompt_sent: "p".to_string(),
+                    response_received: "r".to_string(),
+                    transcript: Vec::new(),
+                    chain_planned_turns: 1,
+                    chain_executed_turns: 1,
+                    chain_completed: true,
+                    chain_abort_reason: None,
+                    evaluation: EvaluationResult::Success {
+                        confidence: 0.9,
+                        matched_phrases: vec!["secret".to_string()],
+                    },
+                    latency_ms: 1,
+                    tokens_used: None,
+                    model_used: None,
+                    generated: true,
+                    seed_payload_id: Some("seed".to_string()),
+                    confidence: 0.0,
+                    requires_review: false,
+                    rationale: String::new(),
+                    evidence: AttackEvidence::default(),
+                    damage: DamageAssessment::default(),
+                },
+            ],
+        };
+
+        run.refresh_metrics();
+
+        assert_eq!(run.payloads_tested, 2);
+        assert_eq!(run.refused_count, 1);
+        assert_eq!(run.success_count, 1);
+        assert_eq!(run.partial_count, 0);
+        assert_eq!(run.inconclusive_count, 0);
+        assert_eq!(run.generated_payloads, 1);
+    }
+
+    #[test]
+    fn session_summary_recomputes_from_runs_instead_of_incremental_state() {
+        let mut session = TestSession::new(
+            ProviderMetadata {
+                provider_id: "test".to_string(),
+                provider_name: "Test".to_string(),
+                requested_model: "model".to_string(),
+            },
+            SessionConfig::default(),
+        );
+        session.summary.total_payloads = 999;
+        session.summary.total_success = 999;
+        session.attacks_run = vec![AttackRun {
+            attack_id: "alpha".to_string(),
+            attack_name: "Alpha".to_string(),
+            payloads_tested: 0,
+            refused_count: 0,
+            success_count: 0,
+            partial_count: 0,
+            inconclusive_count: 0,
+            informational_count: 0,
+            review_only_count: 0,
+            scoreable_payloads: 0,
+            bypass_rate_pct: 0.0,
+            generated_payloads: 0,
+            duration_ms: 1,
+            results: vec![AttackResult {
+                payload_id: "id".to_string(),
+                payload_name: "name".to_string(),
+                prompt_sent: "prompt".to_string(),
+                response_received: "response".to_string(),
+                transcript: Vec::new(),
+                chain_planned_turns: 1,
+                chain_executed_turns: 1,
+                chain_completed: true,
+                chain_abort_reason: None,
+                evaluation: EvaluationResult::Informational,
+                latency_ms: 1,
+                tokens_used: None,
+                model_used: None,
+                generated: false,
+                seed_payload_id: None,
+                confidence: 0.0,
+                requires_review: false,
+                rationale: String::new(),
+                evidence: AttackEvidence::default(),
+                damage: DamageAssessment::default(),
+            }],
+        }];
+
+        session.refresh_metrics();
+
+        assert_eq!(session.summary.total_payloads, 1);
+        assert_eq!(session.summary.total_success, 0);
+        assert_eq!(session.summary.total_informational, 1);
+    }
+
+    fn sample_result(evaluation: EvaluationResult) -> AttackResult {
+        AttackResult {
+            payload_id: "id".to_string(),
+            payload_name: "name".to_string(),
+            prompt_sent: "prompt".to_string(),
+            response_received: "response".to_string(),
+            transcript: Vec::new(),
+            chain_planned_turns: 1,
+            chain_executed_turns: 1,
+            chain_completed: true,
+            chain_abort_reason: None,
+            evaluation,
+            latency_ms: 1,
+            tokens_used: None,
+            model_used: None,
+            generated: false,
+            seed_payload_id: None,
+            confidence: 0.0,
+            requires_review: false,
+            rationale: String::new(),
+            evidence: AttackEvidence::default(),
+            damage: DamageAssessment::default(),
+        }
     }
 }

@@ -436,6 +436,8 @@ cargo run --bin ai-sec -- sessions
 cargo run --bin ai-sec -- review results/<file>.json
 ```
 
+`review` показывает не только payload verdict-ы, но и scenario exposure metadata, HTTP target metadata, tool decisions, redactions и multi-turn transcript.
+
 Сравнение нескольких отчетов:
 
 ```bash
@@ -451,6 +453,7 @@ cargo run --bin ai-sec -- compare
 Когда использовать:
 - чтобы сравнивать модели между собой;
 - чтобы сравнивать baseline и generated прогон;
+- чтобы сравнивать direct, scenario, HTTP target и multi-turn режимы в одном CLI view;
 - чтобы фиксировать исследовательские результаты в reproducible JSON.
 
 ## Основные флаги `run`
@@ -482,6 +485,9 @@ cargo run --bin ai-sec -- help run
 - summary по payload-ам;
 - generated payload metadata;
 - scenario metadata;
+- scenario envelope metadata: `real_envelopes` и `meta_envelopes`;
+- HTTP target metadata: mode, base URL, endpoint, authenticated user, profile, tool decisions, redactions, requests sent;
+- multi-turn metadata: `transcript`, `chain_planned_turns`, `chain_executed_turns`, `chain_completed`, `chain_abort_reason`;
 - evidence;
 - damage assessment;
 - timestamps и schema version.
