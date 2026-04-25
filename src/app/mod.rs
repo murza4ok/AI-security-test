@@ -2,6 +2,7 @@ pub mod interactive;
 pub mod providers;
 pub mod runtime;
 pub mod scenarios;
+pub mod target;
 
 use crate::cli::args::Cli;
 use crate::config;

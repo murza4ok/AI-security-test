@@ -30,7 +30,7 @@ pub struct Cli {
 pub enum Commands {
     /// Запустить одну или несколько категорий атак
     #[command(
-        after_help = "Примеры:\n  ai-sec run --attack prompt_injection --provider deepseek\n  ai-sec run --attack prompt_injection --provider deepseek --generated 3\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot --limit 5\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario internal_rag_bot --retrieval-mode subset\n\nЗамечания:\n  --app-scenario обязателен только для sensitive_data_exposure\n  --output используется только при запуске через один провайдер"
+        after_help = "Примеры:\n  ai-sec run --attack prompt_injection --provider deepseek\n  ai-sec run --attack prompt_injection --provider deepseek --generated 3\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot --limit 5\n  ai-sec run --attack sensitive_data_exposure --provider ollama --app-scenario internal_rag_bot --retrieval-mode subset\n  ai-sec run --attack prompt_injection --target-mode http --target-base-url http://127.0.0.1:3000 --target-user customer_alice --target-profile naive\n\nЗамечания:\n  --app-scenario обязателен только для sensitive_data_exposure\n  --output используется только при запуске через один провайдер или одну HTTP-цель\n  HTTP mode требует --target-mode http и полный набор --target-base-url/--target-user/--target-profile"
     )]
     Run {
         /// ID категории атаки: jailbreaking, prompt_injection, sensitive_data_exposure
@@ -76,6 +76,22 @@ pub enum Commands {
         /// Детерминированный seed для сборки сценария
         #[arg(long)]
         session_seed: Option<String>,
+
+        /// Режим цели: сейчас поддерживается только http
+        #[arg(long)]
+        target_mode: Option<String>,
+
+        /// Base URL внешней HTTP-цели, например http://127.0.0.1:3000
+        #[arg(long)]
+        target_base_url: Option<String>,
+
+        /// Demo-user для login flow внешней HTTP-цели
+        #[arg(long)]
+        target_user: Option<String>,
+
+        /// Security profile внешней HTTP-цели: naive, segmented, guarded
+        #[arg(long)]
+        target_profile: Option<String>,
     },
 
     /// Показать доступные категории атак и число payload-ов
@@ -196,6 +212,10 @@ mod tests {
                 retrieval_mode,
                 tenant,
                 session_seed,
+                target_mode,
+                target_base_url,
+                target_user,
+                target_profile,
                 ..
             }) => {
                 assert_eq!(attack, vec!["sensitive_data_exposure"]);
@@ -203,6 +223,46 @@ mod tests {
                 assert_eq!(retrieval_mode.as_deref(), Some("subset"));
                 assert_eq!(tenant.as_deref(), Some("tenant-a"));
                 assert_eq!(session_seed.as_deref(), Some("demo"));
+                assert_eq!(target_mode, None);
+                assert_eq!(target_base_url, None);
+                assert_eq!(target_user, None);
+                assert_eq!(target_profile, None);
+            }
+            other => panic!("unexpected command: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn run_command_parses_http_target_flags() {
+        let cli = Cli::parse_from([
+            "ai-sec",
+            "run",
+            "--attack",
+            "prompt_injection",
+            "--target-mode",
+            "http",
+            "--target-base-url",
+            "http://127.0.0.1:3000",
+            "--target-user",
+            "customer_alice",
+            "--target-profile",
+            "naive",
+        ]);
+
+        match cli.command {
+            Some(Commands::Run {
+                attack,
+                target_mode,
+                target_base_url,
+                target_user,
+                target_profile,
+                ..
+            }) => {
+                assert_eq!(attack, vec!["prompt_injection"]);
+                assert_eq!(target_mode.as_deref(), Some("http"));
+                assert_eq!(target_base_url.as_deref(), Some("http://127.0.0.1:3000"));
+                assert_eq!(target_user.as_deref(), Some("customer_alice"));
+                assert_eq!(target_profile.as_deref(), Some("naive"));
             }
             other => panic!("unexpected command: {:?}", other),
         }

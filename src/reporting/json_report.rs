@@ -129,6 +129,7 @@ fn migrate_legacy_report_value(value: &mut Value) {
         .entry("config")
         .or_insert_with(|| serde_json::to_value(SessionConfig::default()).unwrap());
     object.entry("benchmark").or_insert_with(|| json!({}));
+    object.entry("target").or_insert_with(|| json!({}));
 
     if let Some(attacks_run) = object.get_mut("attacks_run").and_then(Value::as_array_mut) {
         for run in attacks_run {

@@ -7,6 +7,8 @@
 use async_trait::async_trait;
 use thiserror::Error;
 
+use crate::engine::session::TargetMetadata;
+
 /// Configuration for a single completion request.
 /// Passed to every `complete()` call so callers can tune behaviour per request.
 #[derive(Debug, Clone)]
@@ -102,4 +104,9 @@ pub trait LLMProvider: Send + Sync {
     /// Verify that the provider is reachable and the credentials are valid.
     /// Used by `ai-sec check` before running attacks.
     async fn health_check(&self) -> Result<(), ProviderError>;
+
+    /// Return external target metadata, if this provider talks to a concrete app target.
+    fn target_metadata(&self) -> Option<TargetMetadata> {
+        None
+    }
 }
