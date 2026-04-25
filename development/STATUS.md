@@ -375,9 +375,17 @@ Residual note:
 
 Статус:
 - completed
+- merged into `codex/weekend-integration`
 
 Feature branch:
 - `codex/docs-consistency-sweep`
+
+Feature commits:
+- `c636219`
+- `44a03af`
+
+Integration merge:
+- `26ea951`
 
 Что сделано:
 - root docs, `docs/*` и operator-facing markdown выровнены с фактическим состоянием после `09-reporting-hardening`;
@@ -409,7 +417,7 @@ Residual note:
 
 1. Открой `development/STATUS.md`.
 2. Убедись, что текущая база — `codex/weekend-integration`.
-3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor`, `05-scenario-contract`, `06-web-target-structure`, `07-http-target-client`, `08-multi-turn-foundation` и `09-reporting-hardening`: они уже завершены и влиты в integration branch.
+3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor`, `05-scenario-contract`, `06-web-target-structure`, `07-http-target-client`, `08-multi-turn-foundation`, `09-reporting-hardening` и `10-docs-consistency-sweep`: они уже завершены и влиты в integration branch.
 4. Следующая рабочая ветка по плану: `codex/integration-smoke`.
 5. Используй task-pack `development/branches/11-integration-smoke/task.md`.
 6. Перед стартом `11` учитывай residual note из `10`: для `web_target` честной smoke-проверкой остаётся живой запуск/HTTP-check, а не `--help` path.
