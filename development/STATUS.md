@@ -5,9 +5,9 @@
 ## Current Continuation Point
 
 - integration branch: `codex/weekend-integration`
-- current next branch to start: `codex/reporting-hardening`
-- current next task-pack: `development/branches/09-reporting-hardening/task.md`
-- current wave to continue: `Wave 6`
+- current next branch to start: `codex/docs-consistency-sweep`
+- current next task-pack: `development/branches/10-docs-consistency-sweep/task.md`
+- current wave to continue: `Wave 7`
 - prompts location: `prompts.md`
 
 ## Completed Stages
@@ -331,9 +331,48 @@ Residual note:
 - для совместимости с расширенным payload contract пришлось сделать минимальные compile-through адаптации в `src/generator/mod.rs` и test helpers внутри `src/scenarios/*`; это не отдельный feature-work, а узкая техническая адаптация к новому `Payload` shape;
 - reporting model под multi-turn transcript уже работает, но полноценное выпрямление compare/review/report contract вынесено в следующий этап `09`.
 
+### 09. Reporting Hardening
+
+Статус:
+- completed
+- merged into `codex/weekend-integration`
+
+Feature branch:
+- `codex/reporting-hardening`
+
+Feature commit:
+- `661cce5`
+
+Integration merge:
+- `3180dae`
+
+Что сделано:
+- `AttackRun` и `SessionSummary` переведены на единый derived-metrics path: counters и bypass-rate теперь пересчитываются из `results`, а не живут как инкрементальная разрозненная state;
+- `TestSession.refresh_metrics()` стал единым местом сборки summary, benchmark и scenario aggregates, включая нормализацию envelope/schema metadata;
+- terminal summary, review и compare расширены под session mode, scenario exposure, HTTP target metadata, tool decisions, redactions и multi-turn chain statistics;
+- `compare` теперь сначала печатает session overview, а per-attack table различает сессии стабильными колонками `# + mode`, чтобы одинаковые provider/model не слипались;
+- JSON migration path выровнен так, чтобы legacy reports гарантированно имели предсказуемый `scenario` object при review/compare;
+- `README.md` обновлён под фактический report/review contract для scenario, HTTP target и multi-turn runs.
+
+Проверки:
+- `cargo check --offline --all-targets`
+- `cargo test --offline`
+- `env OLLAMA_BASE_URL=http://127.0.0.1:11434 OLLAMA_MODEL=qwen2.5:0.5b cargo run --offline --bin ai-sec -- run --attack jailbreaking --provider ollama --limit 1 --output /tmp/wt09-cli.json`
+- `cargo run --offline --bin ai-sec -- review /tmp/wt09-cli.json`
+- `env OLLAMA_BASE_URL=http://127.0.0.1:11434 OLLAMA_MODEL=qwen2.5:0.5b cargo run --offline --bin ai-sec -- run --attack sensitive_data_exposure --provider ollama --app-scenario support_bot --limit 1 --output /tmp/wt09-scenario.json`
+- `cargo run --offline --bin ai-sec -- review /tmp/wt09-scenario.json`
+- `cargo run --offline --bin ai-sec -- run --attack jailbreaking --target-mode http --target-base-url http://127.0.0.1:3000 --target-user customer_alice --target-profile naive --limit 1 --output /tmp/wt09-http.json`
+- `cargo run --offline --bin ai-sec -- review /tmp/wt09-http.json`
+- `env OLLAMA_BASE_URL=http://127.0.0.1:11434 OLLAMA_MODEL=qwen2.5:0.5b cargo run --offline --bin ai-sec -- run --attack prompt_injection --provider ollama --limit 1 --output /tmp/wt09-multiturn.json`
+- `cargo run --offline --bin ai-sec -- review /tmp/wt09-multiturn.json`
+- `cargo run --offline --bin ai-sec -- compare /tmp/wt09-cli.json /tmp/wt09-scenario.json /tmp/wt09-http.json /tmp/wt09-multiturn.json`
+
+Residual note:
+- live `run` output по отдельному payload всё ещё может показывать промежуточную эвристику до финального persisted verdict; источником истины для review/compare считается сохранённый session report;
+- docs-consistency sweep должен отдельно пройтись по пользовательским описаниям review/report contract, но кодовая часть reporting для `09` закрыта.
+
 ## Not Started Yet
 
-- `09-reporting-hardening`
 - `10-docs-consistency-sweep`
 - `11-integration-smoke`
 
@@ -341,7 +380,7 @@ Residual note:
 
 1. Открой `development/STATUS.md`.
 2. Убедись, что текущая база — `codex/weekend-integration`.
-3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor`, `05-scenario-contract`, `06-web-target-structure`, `07-http-target-client` и `08-multi-turn-foundation`: они уже завершены и влиты в integration branch.
-4. Следующая рабочая ветка по плану: `codex/reporting-hardening`.
-5. Используй task-pack `development/branches/09-reporting-hardening/task.md`.
-6. Перед стартом `09` учитывай residual note из `08`: chain execution и transcript metadata уже появились, а следующий шаг должен довести compare/review/report contract до единого источника истины без возврата в provider layer.
+3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor`, `05-scenario-contract`, `06-web-target-structure`, `07-http-target-client`, `08-multi-turn-foundation` и `09-reporting-hardening`: они уже завершены и влиты в integration branch.
+4. Следующая рабочая ветка по плану: `codex/docs-consistency-sweep`.
+5. Используй task-pack `development/branches/10-docs-consistency-sweep/task.md`.
+6. Перед стартом `10` учитывай residual note из `09`: кодовый report/review contract уже выровнен, а следующий шаг должен синхронизировать живую документацию с этим фактическим состоянием без возврата в `src/*`.
