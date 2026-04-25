@@ -5,9 +5,9 @@
 ## Current Continuation Point
 
 - integration branch: `codex/weekend-integration`
-- current next branch to start: `codex/http-target-client`
-- current next task-pack: `development/branches/07-http-target-client/task.md`
-- current wave to continue: `Wave 4`
+- current next branch to start: `codex/multi-turn-foundation`
+- current next task-pack: `development/branches/08-multi-turn-foundation/task.md`
+- current wave to continue: `Wave 5`
 - prompts location: `prompts.md`
 
 ## Completed Stages
@@ -250,9 +250,43 @@ Reviewer note:
 Residual note:
 - в этом окружении scenario runs доходили до report path, но provider completion внутри `ai-sec run ... --provider ollama` завершался `Provider is not configured (missing API key or URL)` несмотря на успешный `check --provider ollama`; это выглядит как существующий provider/runtime path gap вне scope `05`, а не как поломка scenario contract.
 
+### 07. HTTP Target Client
+
+Статус:
+- completed
+- merged into `codex/weekend-integration`
+
+Feature branch:
+- `codex/http-target-client`
+
+Feature commit:
+- `c850970`
+
+Integration merge:
+- `515b28f`
+
+Что сделано:
+- `ai-sec` теперь умеет атаковать `web_target` как внешнюю HTTP-цель через отдельный `HttpTargetProvider`, без зависимости от внутренних модулей `web_target`;
+- добавлен CLI contract для HTTP mode: `--target-mode http`, `--target-base-url`, `--target-user`, `--target-profile`;
+- login flow и session cookie persistence реализованы через `POST /login` и последующие запросы к `POST /api/chat`;
+- session-level `target` metadata сохраняется в JSON report и выводится в terminal summary;
+- пользовательский и архитектурный контракт HTTP mode зафиксирован в `README.md`, `Architecture.md` и `docs/HTTP_Target_Mode.md`.
+
+Проверки:
+- `cargo check --offline --all-targets`
+- `cargo test --offline`
+- live smoke-check `cargo run --offline --bin web_target --`
+- `curl -i http://127.0.0.1:3000/health`
+- `curl -i -c /tmp/ai-sec-webtarget.cookies -X POST http://127.0.0.1:3000/login -H 'Content-Type: application/x-www-form-urlencoded' --data 'username=customer_alice&profile=naive'`
+- `cargo run --offline --bin ai-sec -- run --attack prompt_injection --target-mode http --target-base-url http://127.0.0.1:3000 --target-user customer_alice --target-profile naive --limit 1 --output /tmp/wt07-http.json`
+- `jq '{provider: .provider, target: .target, summary: .summary}' /tmp/wt07-http.json`
+
+Residual note:
+- live smoke был подтверждён на single-turn classic attack path `prompt_injection` и профиле `customer_alice + naive`;
+- HTTP mode пока сознательно ограничен classic payload-driven flow и не покрывает `sensitive_data_exposure` или multi-turn chains: это следующий этап `08`.
+
 ## Not Started Yet
 
-- `07-http-target-client`
 - `08-multi-turn-foundation`
 - `09-reporting-hardening`
 - `10-docs-consistency-sweep`
@@ -262,7 +296,7 @@ Residual note:
 
 1. Открой `development/STATUS.md`.
 2. Убедись, что текущая база — `codex/weekend-integration`.
-3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor`, `05-scenario-contract` и `06-web-target-structure`: они уже завершены и влиты в integration branch.
-4. Следующая рабочая ветка по плану: `codex/http-target-client`.
-5. Используй task-pack `development/branches/07-http-target-client/task.md`.
-6. Перед стартом `07` учитывай residual note из `05`: scenario report contract уже стабилизирован, но provider completion path для local Ollama ещё требует отдельной проверки в рамках следующей волны только если это затронет HTTP mode.
+3. Не запускай повторно `01-runtime-boundary-contract`, `02-ai-sec-dx-and-launch`, `03-ai-sec-runtime-determinism`, `04-provider-contract-refactor`, `05-scenario-contract`, `06-web-target-structure` и `07-http-target-client`: они уже завершены и влиты в integration branch.
+4. Следующая рабочая ветка по плану: `codex/multi-turn-foundation`.
+5. Используй task-pack `development/branches/08-multi-turn-foundation/task.md`.
+6. Перед стартом `08` учитывай residual note из `07`: HTTP target mode уже стабилен для single-turn classic flow, а следующий шаг должен добавлять chain execution без выхода за allowed scope `08`.
