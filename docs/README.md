@@ -16,6 +16,7 @@
 - `Scenario_Schema_v2.md` — контракт сценарного schema-слоя.
 - `Sensitive_Data_Exposure_Spec.md` — спецификация сценарного режима `sensitive_data_exposure`.
 - `HTTP_Target_Mode.md` — CLI contract и ограничения HTTP-режима для `web_target`.
+- `Chain_Payload_Format.md` — формат multi-turn payload chains и transcript contract.
 - `Ollama_Demo_Setup.md` — практический запуск локального demo-контура на `Ollama`.
 - `Ollama_Demo_Generator.md` — генерация demo-harness и вспомогательных скриптов для `Ollama`.
 

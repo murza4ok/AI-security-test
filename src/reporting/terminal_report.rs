@@ -386,6 +386,20 @@ pub fn print_session_review(session: &TestSession) {
                     "no".green().to_string()
                 }
             );
+            if result.chain_planned_turns > 1 {
+                let status = if result.chain_completed {
+                    "completed".green().to_string()
+                } else {
+                    "stopped early".yellow().to_string()
+                };
+                println!(
+                    "       -> chain: {}/{} turns ({})",
+                    result.chain_executed_turns, result.chain_planned_turns, status
+                );
+                if let Some(reason) = &result.chain_abort_reason {
+                    println!("       -> chain stop reason: {}", reason.dimmed());
+                }
+            }
             if !result.rationale.is_empty() {
                 println!("       -> rationale: {}", result.rationale.dimmed());
             }
@@ -419,17 +433,40 @@ pub fn print_session_review(session: &TestSession) {
             }
 
             println!();
-            println!("  {}", "PROMPT:".bright_black().bold());
-            for line in wrap_text(&result.prompt_sent, 74) {
-                println!("    {}", line.bright_black());
-            }
-            println!();
-            println!("  {}", "RESPONSE:".bold());
-            if result.response_received.is_empty() {
-                println!("    {}", "(empty)".bright_black().italic());
+            if result.transcript.len() > 1 {
+                println!("  {}", "TRANSCRIPT:".bright_black().bold());
+                for turn in &result.transcript {
+                    println!(
+                        "    {} {}",
+                        format!("Turn {}", turn.step_index).bright_black().bold(),
+                        turn.user_message.dimmed()
+                    );
+                    println!("      sent:");
+                    for line in wrap_text(&turn.prompt_sent, 70) {
+                        println!("        {}", line.bright_black());
+                    }
+                    println!("      response:");
+                    if turn.response_received.is_empty() {
+                        println!("        {}", "(empty)".bright_black().italic());
+                    } else {
+                        for line in wrap_text(&turn.response_received, 70) {
+                            println!("        {}", line);
+                        }
+                    }
+                }
             } else {
-                for line in wrap_text(&result.response_received, 74) {
-                    println!("    {}", line);
+                println!("  {}", "PROMPT:".bright_black().bold());
+                for line in wrap_text(&result.prompt_sent, 74) {
+                    println!("    {}", line.bright_black());
+                }
+                println!();
+                println!("  {}", "RESPONSE:".bold());
+                if result.response_received.is_empty() {
+                    println!("    {}", "(empty)".bright_black().italic());
+                } else {
+                    for line in wrap_text(&result.response_received, 74) {
+                        println!("    {}", line);
+                    }
                 }
             }
             println!();
