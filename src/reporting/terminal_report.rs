@@ -17,6 +17,7 @@ pub fn print_session_summary(session: &TestSession) {
         "  Requested model: {}",
         session.provider.requested_model.bold()
     );
+    println!("  Session mode: {}", session_mode_label(session).bold());
     if let Some(target_mode) = &session.target.mode {
         println!("  Target mode: {}", target_mode.bold());
         if let Some(base_url) = &session.target.base_url {
@@ -36,6 +37,12 @@ pub fn print_session_summary(session: &TestSession) {
             println!(
                 "  Target tool calls attempted: {}",
                 session.target.tool_calls_attempted.join(", ")
+            );
+        }
+        if !session.target.tool_calls_allowed.is_empty() {
+            println!(
+                "  Target tool calls allowed: {}",
+                session.target.tool_calls_allowed.join(", ")
             );
         }
         if !session.target.tool_calls_denied.is_empty() {
@@ -72,6 +79,19 @@ pub fn print_session_summary(session: &TestSession) {
             session.scenario.leaked_canaries.len(),
             session.scenario.leaked_pii_fields.len(),
             session.scenario.leaked_documents.len()
+        );
+        println!(
+            "  Scenario envelopes: real {} | meta {} | secret types {}",
+            session.scenario.real_envelopes.len(),
+            session.scenario.meta_envelopes.len(),
+            session.scenario.leaked_secret_types.len(),
+        );
+    }
+    let (chain_results, completed_chains, stopped_chains, transcript_turns) = chain_stats(session);
+    if chain_results > 0 {
+        println!(
+            "  Multi-turn results: {} | completed {} | stopped {} | transcript turns {}",
+            chain_results, completed_chains, stopped_chains, transcript_turns
         );
     }
     println!();
@@ -151,15 +171,19 @@ pub fn print_saved_sessions_overview(sessions: &[SavedSessionInfo]) {
         Cell::new("Started").add_attribute(Attribute::Bold),
         Cell::new("Provider").add_attribute(Attribute::Bold),
         Cell::new("Model").add_attribute(Attribute::Bold),
+        Cell::new("Mode").add_attribute(Attribute::Bold),
         Cell::new("Attacks").add_attribute(Attribute::Bold),
         Cell::new("Payloads").add_attribute(Attribute::Bold),
+        Cell::new("Bypass %").add_attribute(Attribute::Bold),
         Cell::new("Generated").add_attribute(Attribute::Bold),
         Cell::new("Exposure").add_attribute(Attribute::Bold),
+        Cell::new("Chains").add_attribute(Attribute::Bold),
         Cell::new("File").add_attribute(Attribute::Bold),
     ]);
 
     for (index, saved) in sessions.iter().enumerate() {
         let summary = &saved.session.summary;
+        let (chain_results, _, _, _) = chain_stats(&saved.session);
         let file_name = saved
             .path
             .file_name()
@@ -177,10 +201,19 @@ pub fn print_saved_sessions_overview(sessions: &[SavedSessionInfo]) {
             ),
             Cell::new(&saved.session.provider.provider_name),
             Cell::new(&saved.session.provider.requested_model),
+            Cell::new(session_mode_label(&saved.session)),
             Cell::new(saved.session.attacks_run.len()),
             Cell::new(summary.total_payloads),
+            Cell::new(format!("{:.0}%", summary.bypass_rate_pct)).fg(
+                if summary.bypass_rate_pct > 0.0 {
+                    Color::Red
+                } else {
+                    Color::Green
+                },
+            ),
             Cell::new(summary.total_generated_payloads).fg(Color::Cyan),
             Cell::new(saved.session.scenario.exposure_score),
+            Cell::new(chain_results),
             Cell::new(file_name),
         ]);
     }
@@ -199,24 +232,41 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
     println!("{}", "== SESSION COMPARISON ==".cyan().bold());
     println!();
 
+    let mut overview = Table::new();
+    overview.set_header(vec![
+        Cell::new("#").add_attribute(Attribute::Bold),
+        Cell::new("Provider").add_attribute(Attribute::Bold),
+        Cell::new("Model").add_attribute(Attribute::Bold),
+        Cell::new("Mode").add_attribute(Attribute::Bold),
+        Cell::new("Target/Scenario").add_attribute(Attribute::Bold),
+        Cell::new("Payloads").add_attribute(Attribute::Bold),
+        Cell::new("Bypass %").add_attribute(Attribute::Bold),
+        Cell::new("Exposure").add_attribute(Attribute::Bold),
+        Cell::new("Chains").add_attribute(Attribute::Bold),
+        Cell::new("Requests").add_attribute(Attribute::Bold),
+    ]);
     for (index, session) in sessions.iter().enumerate() {
-        let exposure_suffix = if session.scenario.exposure_score > 0 {
-            format!(" | exposure {}", session.scenario.exposure_score)
-        } else {
-            String::new()
-        };
-        println!(
-            "  [{}] {}   {}{}",
-            index + 1,
-            session.provider.provider_name.bold(),
-            session
-                .started_at
-                .format("%Y-%m-%d %H:%M UTC")
-                .to_string()
-                .bright_black(),
-            exposure_suffix.bright_black()
-        );
+        let (chain_results, _, _, _) = chain_stats(session);
+        overview.add_row(vec![
+            Cell::new(index + 1),
+            Cell::new(&session.provider.provider_name),
+            Cell::new(&session.provider.requested_model),
+            Cell::new(session_mode_label(session)),
+            Cell::new(target_or_scenario_label(session)),
+            Cell::new(session.summary.total_payloads),
+            Cell::new(format!("{:.0}%", session.summary.bypass_rate_pct)).fg(
+                if session.summary.bypass_rate_pct > 0.0 {
+                    Color::Red
+                } else {
+                    Color::Green
+                },
+            ),
+            Cell::new(session.scenario.exposure_score),
+            Cell::new(chain_results),
+            Cell::new(session.target.requests_sent),
+        ]);
     }
+    println!("{}", overview);
     println!();
 
     let mut all_categories: Vec<(String, String)> = Vec::new();
@@ -230,8 +280,11 @@ pub fn print_comparison_table(sessions: &[TestSession]) {
 
     let mut table = Table::new();
     let mut header = vec![Cell::new("Attack Category").add_attribute(Attribute::Bold)];
-    for session in sessions {
-        header.push(Cell::new(&session.provider.provider_name).add_attribute(Attribute::Bold));
+    for (index, session) in sessions.iter().enumerate() {
+        header.push(
+            Cell::new(format!("#{} {}", index + 1, session_mode_label(session)))
+                .add_attribute(Attribute::Bold),
+        );
     }
     table.set_header(header);
 
@@ -273,11 +326,24 @@ pub fn print_session_review(session: &TestSession) {
         session.started_at.format("%Y-%m-%d %H:%M UTC"),
         session.provider.provider_name.bold()
     );
+    println!("  Mode: {}", session_mode_label(session).bold());
+    if let Some(target_mode) = &session.target.mode {
+        println!(
+            "  Target: {} | requests {} | tool attempts {} | denied {} | redactions {}",
+            target_mode.bold(),
+            session.target.requests_sent,
+            session.target.tool_calls_attempted.len(),
+            session.target.tool_calls_denied.len(),
+            session.target.redactions.len()
+        );
+    }
     if let Some(scenario_name) = &session.scenario.scenario_name {
         println!(
-            "  Scenario: {} | exposure {}",
+            "  Scenario: {} | exposure {} | real envelopes {} | meta envelopes {}",
             scenario_name.bold(),
-            session.scenario.exposure_score
+            session.scenario.exposure_score,
+            session.scenario.real_envelopes.len(),
+            session.scenario.meta_envelopes.len()
         );
     }
     println!("  {}", "-".repeat(64).bright_blue());
@@ -477,6 +543,60 @@ pub fn print_session_review(session: &TestSession) {
     println!();
     println!("{}", "  End of review.".bright_blue().bold());
     println!();
+}
+
+fn session_mode_label(session: &TestSession) -> String {
+    let mut parts = Vec::new();
+    if session.scenario.scenario_name.is_some() {
+        parts.push("scenario");
+    }
+    if session.target.mode.is_some() {
+        parts.push("http-target");
+    }
+    let (chain_results, _, _, _) = chain_stats(session);
+    if chain_results > 0 {
+        parts.push("multi-turn");
+    }
+    if parts.is_empty() {
+        parts.push("direct");
+    }
+    parts.join("+")
+}
+
+fn target_or_scenario_label(session: &TestSession) -> String {
+    if let Some(target_url) = &session.target.base_url {
+        if let Some(profile) = &session.target.security_profile {
+            return format!("{} ({})", target_url, profile);
+        }
+        return target_url.clone();
+    }
+    if let Some(scenario_name) = &session.scenario.scenario_name {
+        return scenario_name.clone();
+    }
+    "-".to_string()
+}
+
+fn chain_stats(session: &TestSession) -> (usize, usize, usize, usize) {
+    let mut chain_results = 0;
+    let mut completed = 0;
+    let mut stopped = 0;
+    let mut transcript_turns = 0;
+
+    for run in &session.attacks_run {
+        for result in &run.results {
+            transcript_turns += result.transcript.len();
+            if result.chain_planned_turns > 1 {
+                chain_results += 1;
+                if result.chain_completed {
+                    completed += 1;
+                } else {
+                    stopped += 1;
+                }
+            }
+        }
+    }
+
+    (chain_results, completed, stopped, transcript_turns)
 }
 
 fn wrap_text(text: &str, width: usize) -> Vec<String> {
